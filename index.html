@@ -57,12 +57,13 @@
   .simon-mask{
     position:absolute;
     left:49.42%; top:33.85%; width:9.09%; height:46.35%;
-    background:
-      linear-gradient(90deg, rgba(0,0,0,.05) 0 2px, transparent 2px 100%) ,
-      linear-gradient(var(--floor), var(--floor2));
-    background-size: 14px 100%, 100% 100%;
-    z-index:2;
+    background-image:var(--bed-empty-img);
+    background-repeat:no-repeat;
+    background-size: 1100% 216%;
+    background-position: 54.4% 63.1%;
+    z-index:2; display:none;
   }
+  .simon-mask.show{ display:block; }
   .simon-idle-crop{
     position:absolute; left:49.42%; top:33.85%; width:9.09%; height:46.35%;
     background-image:var(--base-img);
@@ -78,12 +79,6 @@
     0%,100%{ transform:translateY(0); }
     50%{ transform:translateY(2.2%); }
   }
-  .bed{
-    position:absolute; left:2%; top:58%; width:19%; height:28%;
-    z-index:2; transition:opacity .6s ease, transform .6s ease;
-  }
-  .bed.hide{ opacity:0; transform:translateY(6%); pointer-events:none; }
-  .bed svg{ width:100%; height:100%; display:block; }
   .sprite{
     position:absolute; width:6.2%; aspect-ratio: 14/26;
     z-index:4; display:none; transform:translate(-50%,-92%);
@@ -189,7 +184,7 @@
 </style>
 
 <div class="app">
-  <h1 class="pixelfont">🛌 Sleepwalking Simon <span id="hostBadge" class="badge hidden">host view</span></h1>
+  <div style="text-align:center;"><span id="hostBadge" class="badge hidden">host view</span></div>
 
   <!-- TITLE SCREEN -->
   <div id="screenTitle" class="center-screen">
@@ -217,9 +212,8 @@
       <div class="stage-col">
         <div class="stage-wrap" id="stage">
           <div class="room-bg" id="roomBg"></div>
-          <div class="simon-mask"></div>
+          <div class="simon-mask" id="mask"></div>
           <div class="simon-idle-crop" id="idleCrop"></div>
-          <div class="bed" id="bed"></div>
           <div class="sprite" id="sprite"></div>
           <!-- hotspots injected by JS -->
         </div>
@@ -286,12 +280,15 @@
   ];
   var BASE_IMG = "assets/sleepwalking-simon-base.JPG";
   var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
-  var BED_POS = {left:9, top:75};
+  var BED_ASLEEP_IMG = "assets/sleepwalking-simon-bed-asleep.JPG";
+  var BED_EMPTY_IMG = "assets/sleepwalking-simon-bed-empty.JPG";
+  var BED_POS = {left:74, top:88};
   var CENTER_POS = {left:53.97, top:80.2};
   var WAKE_MS = 2200;
 
   document.documentElement.style.setProperty('--base-img', 'url(' + BASE_IMG + ')');
   document.documentElement.style.setProperty('--title-img', 'url(' + TITLE_IMG + ')');
+  document.documentElement.style.setProperty('--bed-empty-img', 'url(' + BED_EMPTY_IMG + ')');
 
   var params = new URLSearchParams(location.search);
   var isHost = params.get('host') === '1';
@@ -391,24 +388,6 @@
       '<path d="M3 4.2 Q7 -1 11 4.2 Q11 2 7 1.4 Q3 2 3 4.2 Z" fill="#4a3324"/>' +
       '</svg>';
   }
-  function svgBed(){
-    return '<svg viewBox="0 0 60 34" xmlns="http://www.w3.org/2000/svg">' +
-      '<rect x="2" y="6" width="52" height="24" rx="2" fill="#4a3324" stroke="#241a12" stroke-width="1"/>' +
-      '<rect x="5" y="9" width="46" height="18" rx="1" fill="#274b8c"/>' +
-      '<rect x="5" y="9" width="46" height="7" fill="#8bd3ff" opacity=".9"/>' +
-      '<rect x="0" y="4" width="6" height="26" fill="#241a12"/>' +
-      '<rect x="54" y="4" width="6" height="26" fill="#241a12"/>' +
-      '<g id="lump">' +
-        '<ellipse cx="18" cy="16" rx="9" ry="6" fill="#3363b0"/>' +
-        '<circle cx="10" cy="13" r="3.4" fill="#e7b78c"/>' +
-        '<path d="M7 12 Q10 8 13.5 12 Q13 10 10 9.6 Q7 10 7 12 Z" fill="#4a3324"/>' +
-      '</g>' +
-      '</svg>';
-  }
-
-  el('bed').innerHTML = svgBed();
-  var lumpEl; // set after DOM ready
-
   // ---------- build hotspots ----------
   var stage = el('stage');
   var hotspotEls = ITEMS.map(function(item, i){
@@ -591,15 +570,15 @@
     lastPhaseKey = phaseKey;
 
     var roomBg = el('roomBg');
-    var bed = el('bed');
+    var mask = el('mask');
     var idle = el('idleCrop');
     var banner = el('revealBanner');
     banner.classList.add('hidden');
     clearTimeout(animTimer);
 
     if (session.phase === 'lobby' || !session.phase){
-      roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
-      bed.classList.remove('hide');
+      roomBg.style.backgroundImage = 'url(' + BED_ASLEEP_IMG + ')';
+      mask.classList.remove('show');
       idle.classList.remove('show');
       el('sprite').classList.remove('show','step');
       setHotspots(false);
@@ -607,19 +586,21 @@
     }
 
     if (session.phase === 'active'){
-      roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
       var elapsed = session.startedAt ? (Date.now() - new Date(session.startedAt).getTime()) : WAKE_MS;
       idle.classList.remove('show');
       if (elapsed < WAKE_MS){
-        bed.classList.add('hide');
+        roomBg.style.backgroundImage = 'url(' + BED_EMPTY_IMG + ')';
+        mask.classList.add('show');
         setHotspots(false);
         var remaining = Math.max(300, WAKE_MS - elapsed);
         playTransit(BED_POS, CENTER_POS, remaining, function(){
+          roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
           idle.classList.add('show');
           setHotspots(true);
         });
       } else {
-        bed.classList.add('hide');
+        roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
+        mask.classList.add('show');
         el('sprite').classList.remove('show','step');
         idle.classList.add('show');
         setHotspots(true);
@@ -628,18 +609,20 @@
     }
 
     if (session.phase === 'revealed'){
-      bed.classList.add('hide');
       idle.classList.remove('show');
       setHotspots(false);
       var elapsed2 = session.revealAt ? (Date.now() - new Date(session.revealAt).getTime()) : 999999;
       var WALK_MS = 2000;
       if (session.targetIndex !== null && elapsed2 < WALK_MS){
         roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
+        mask.classList.add('show');
         var remaining2 = Math.max(300, WALK_MS - elapsed2);
         playTransit(CENTER_POS, itemPos(session.targetIndex), remaining2, function(){
+          mask.classList.remove('show');
           showTargetImage();
         });
       } else {
+        mask.classList.remove('show');
         showTargetImage();
       }
       return;
