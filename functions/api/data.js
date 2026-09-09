@@ -21,7 +21,13 @@ export async function onRequestGet(context) {
   const players = {};
   for (const row of playerRows) players[row.slug] = JSON.parse(row.data);
 
+  // Explicitly uncacheable: this is polled for live state, and an
+  // intermediate cache (a browser, or a corporate proxy) replaying a stale
+  // response makes the whole game look frozen for as long as it caches.
   return new Response(JSON.stringify({ session, players }), {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
   });
 }

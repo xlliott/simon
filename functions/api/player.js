@@ -15,14 +15,14 @@ export async function onRequestPost(context) {
   if (body.op === "deleteAll") {
     await env.GAME_DB.prepare("DELETE FROM players").run();
     return new Response(JSON.stringify({ ok: true }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     });
   }
 
   if (body.op === "delete") {
     await env.GAME_DB.prepare("DELETE FROM players WHERE slug = ?").bind(body.slug).run();
     return new Response(JSON.stringify(null), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     });
   }
 
@@ -40,6 +40,6 @@ export async function onRequestPost(context) {
     .run();
 
   return new Response(JSON.stringify(next), {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }

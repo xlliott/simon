@@ -21,6 +21,6 @@ export async function onRequestPost(context) {
     .run();
 
   return new Response(JSON.stringify(next), {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
