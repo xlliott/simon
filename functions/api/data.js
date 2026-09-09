@@ -1,21 +1,25 @@
-// GET /api/data — returns the full shared game state in one shot,
-// so the client can poll a single endpoint. Players are stored one per
-// KV key ("player:<slug>"), so this lists that prefix and reads each one.
+// GET /api/data — returns the full shared game state in one shot, so the
+// client can poll a single endpoint.
+//
+// Backed by D1 rather than KV: KV caches reads at the edge for up to 60s and
+// propagates writes lazily, so a delete or a new player could stay invisible
+// long enough to look broken. D1 reads are strongly consistent.
 export async function onRequestGet(context) {
   const { env } = context;
-  const [sessionRaw, list] = await Promise.all([
-    env.GAME_KV.get("session"),
-    env.GAME_KV.list({ prefix: "player:" }),
-  ]);
-  const session = sessionRaw ? JSON.parse(sessionRaw) : {};
 
+  const results = await env.GAME_DB.batch([
+    env.GAME_DB.prepare("CREATE TABLE IF NOT EXISTS session (id INTEGER PRIMARY KEY, data TEXT)"),
+    env.GAME_DB.prepare("CREATE TABLE IF NOT EXISTS players (slug TEXT PRIMARY KEY, data TEXT)"),
+    env.GAME_DB.prepare("SELECT data FROM session WHERE id = 1"),
+    env.GAME_DB.prepare("SELECT slug, data FROM players"),
+  ]);
+
+  const sessionRows = results[2].results || [];
+  const playerRows = results[3].results || [];
+
+  const session = sessionRows.length ? JSON.parse(sessionRows[0].data) : {};
   const players = {};
-  await Promise.all(
-    list.keys.map(async (k) => {
-      const raw = await env.GAME_KV.get(k.name);
-      if (raw) players[k.name.slice("player:".length)] = JSON.parse(raw);
-    })
-  );
+  for (const row of playerRows) players[row.slug] = JSON.parse(row.data);
 
   return new Response(JSON.stringify({ session, players }), {
     headers: { "Content-Type": "application/json" },

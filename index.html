@@ -300,6 +300,11 @@
       return {
         path: p,
         doc: function(id){ return makeDoc(p + '/' + (id || Math.random().toString(36).slice(2))); },
+        deleteAll: function(){
+          collSnap(p).docs.forEach(function(d){ delete store[p + '/' + d.id]; });
+          (collListeners[p] || []).forEach(function(cb){ cb(collSnap(p)); });
+          return Promise.resolve();
+        },
         get: function(){ return Promise.resolve(collSnap(p)); },
         onSnapshot: function(next){
           collListeners[p] = collListeners[p] || [];
@@ -385,6 +390,7 @@
         return {
           path:'players',
           doc: playerDoc,
+          deleteAll: function(){ return postJson('/api/player', {op:'deleteAll'}).then(poll); },
           get: function(){ return poll().then(playersCollSnap); },
           onSnapshot: function(next){
             playersListeners.push(next);
@@ -536,8 +542,7 @@
 
     el('btnResetGame').addEventListener('click', function(){
       if (!confirm('Reset the game? This clears every player\'s name and score, and returns everyone to the title screen.')) return;
-      var deletes = players.map(function(p){ return db.doc('players/' + slugify(p.name)).delete(); });
-      Promise.all(deletes).then(function(){
+      db.collection('players').deleteAll().then(function(){
         return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null });
       });
     });
