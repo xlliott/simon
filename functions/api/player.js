@@ -1,22 +1,33 @@
-// POST /api/player — writes one player's document, keyed by name-slug, into
-// a single "players" KV entry (an object map of slug -> player data).
+// POST /api/player — writes one player's document under its own KV key
+// ("player:<slug>"), rather than one shared blob for everyone. This matters
+// because two players writing at once (voting close together, or a host
+// reset deleting several at once) previously raced on a single shared key
+// and could silently clobber each other's write. Separate keys per player
+// mean those writes never touch the same key, so they can't collide.
 // Body: { op: "set" | "update" | "delete", slug, data }
 export async function onRequestPost(context) {
   const { request, env } = context;
   const body = await request.json();
-  const currentRaw = await env.GAME_KV.get("players");
-  const players = currentRaw ? JSON.parse(currentRaw) : {};
+  const key = "player:" + body.slug;
 
   if (body.op === "delete") {
-    delete players[body.slug];
-  } else if (body.op === "set") {
-    players[body.slug] = body.data;
-  } else if (body.op === "update") {
-    players[body.slug] = Object.assign({}, players[body.slug] || {}, body.data);
+    await env.GAME_KV.delete(key);
+    return new Response(JSON.stringify(null), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  await env.GAME_KV.put("players", JSON.stringify(players));
-  return new Response(JSON.stringify(players[body.slug] || null), {
+  var next;
+  if (body.op === "set") {
+    next = body.data;
+  } else {
+    const currentRaw = await env.GAME_KV.get(key);
+    const current = currentRaw ? JSON.parse(currentRaw) : {};
+    next = Object.assign({}, current, body.data);
+  }
+
+  await env.GAME_KV.put(key, JSON.stringify(next));
+  return new Response(JSON.stringify(next), {
     headers: { "Content-Type": "application/json" },
   });
 }
