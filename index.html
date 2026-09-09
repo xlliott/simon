@@ -222,6 +222,10 @@
           <p class="muted" id="hostPhaseNote"></p>
           <h2 style="margin-top:10px;">Pick tonight's target <span class="muted" style="text-transform:none;">(hidden from team)</span></h2>
           <div class="target-grid" id="targetGrid"></div>
+          <div class="row" style="margin-top:14px;">
+            <button id="btnResetGame" class="btn">Reset Game</button>
+          </div>
+          <p class="muted">Clears everyone's name and score and starts over from the lobby.</p>
         </div>
       </div>
     </div>
@@ -384,6 +388,7 @@
 
   var myName = localStorage.getItem('sw-simon-name') || '';
   var mySlug = myName ? slugify(myName) : null;
+  var hasJoinedThisSession = false;
 
   el('btnStart').addEventListener('click', function(){
     if (isHost){ showScreen('screenGame'); return; }
@@ -450,6 +455,13 @@
     db.collection('players').onSnapshot(function(qs){
       players = qs.docs.map(function(d){ return d.data(); }).filter(Boolean);
       players.sort(function(a,b){ return (a.joinedAt||'').localeCompare(b.joinedAt||''); });
+      var imInList = mySlug && players.some(function(p){ return slugify(p.name) === mySlug; });
+      if (imInList) hasJoinedThisSession = true;
+      if (!isHost && mySlug && hasJoinedThisSession && !imInList){
+        mySlug = null; myVoteLocal = null; hasJoinedThisSession = false;
+        localStorage.removeItem('sw-simon-name');
+        showScreen('screenTitle');
+      }
       render();
     });
 
@@ -465,6 +477,14 @@
       var btn = e.target.closest('.remove-player'); if (!btn || !isHost) return;
       if (!confirm('Remove this player from the game?')) return;
       db.doc('players/' + btn.dataset.slug).delete();
+    });
+
+    el('btnResetGame').addEventListener('click', function(){
+      if (!confirm('Reset the game? This clears every player\'s name and score, and returns everyone to the title screen.')) return;
+      var deletes = players.map(function(p){ return db.doc('players/' + slugify(p.name)).delete(); });
+      Promise.all(deletes).then(function(){
+        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null });
+      });
     });
 
     targetGrid.addEventListener('click', function(e){
