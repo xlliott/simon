@@ -227,23 +227,9 @@
   <footer>Sprint fact: sleepwalking (somnambulism) usually happens during deep non-REM sleep, early in the night.</footer>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
 (function(){
   "use strict";
-
-  // Paste your Firebase project's config here (Firebase console > Project
-  // settings > General > Your apps > SDK setup and configuration).
-  // These values are public identifiers, not secrets — safe to commit.
-  var FIREBASE_CONFIG = {
-    apiKey: "AIzaSyBVpbzO2eDVLfzTmBfNav-1T_9covIUcH0",
-    authDomain: "simon-72537.firebaseapp.com",
-    projectId: "simon-72537",
-    storageBucket: "simon-72537.firebasestorage.app",
-    messagingSenderId: "645085327365",
-    appId: "1:645085327365:web:73dcd2da9ae3003537ec6c"
-  };
 
   var ITEMS = [
     {name:"Fridge",    img:"assets/sleepwalking-simon-01.JPG", left:8.9,  top:32.3, w:17.9, h:43.9},
@@ -326,25 +312,99 @@
     return { doc: makeDoc, collection: makeColl, __mock:true };
   }
 
-  var dbPromise = (function(){
-    var configured = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE_') !== 0;
-    if (configured && window.firebase){
-      try{
-        firebase.initializeApp(FIREBASE_CONFIG);
-        var firestore = firebase.firestore();
-        // Some corporate networks block Firestore's persistent streaming
-        // connection but allow plain HTTP long-polling — auto-detect and
-        // fall back to that so the game still syncs on locked-down wifi.
-        firestore.settings({ experimentalAutoDetectLongPolling: true });
-        return Promise.resolve(firestore);
-      }catch(e){
-        console.error('Firebase init failed, falling back to local-only demo mode.', e);
-      }
-    } else {
-      console.warn('No Firebase config set — running in local demo mode. Votes/names will not sync between devices until you paste your Firebase config at the top of the script.');
+  // ---------- shared game state via Cloudflare Pages Functions + KV ----------
+  // Same-origin REST endpoints (see /functions/api) polled on an interval —
+  // used instead of a third-party service like Firebase because a work
+  // network can block Google's API domains outright, but never blocks the
+  // site's own domain.
+  function createCloudflareDb(initialData){
+    var POLL_MS = 1500;
+    var cache = { session: initialData.session || {}, players: initialData.players || {} };
+    var sessionListeners = [];
+    var playersListeners = [];
+
+    function sessionSnap(){
+      var data = cache.session;
+      var hasData = data && Object.keys(data).length > 0;
+      return { id:'state', exists: hasData, data: function(){ return hasData ? data : undefined; } };
     }
-    return Promise.resolve(createMockDb());
-  })();
+    function playerSnap(slug){
+      var data = cache.players[slug];
+      return { id: slug, exists: data !== undefined, data: function(){ return data; } };
+    }
+    function playersCollSnap(){
+      var docs = Object.keys(cache.players).map(playerSnap);
+      return { docs: docs, size: docs.length, empty: docs.length === 0, docChanges: function(){ return []; } };
+    }
+    function postJson(url, body){
+      return fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    }
+    function poll(){
+      return fetch('/api/data').then(function(r){
+        if (!r.ok) throw new Error('bad status ' + r.status);
+        return r.json();
+      }).then(function(json){
+        cache.session = json.session || {};
+        cache.players = json.players || {};
+        sessionListeners.forEach(function(cb){ cb(sessionSnap()); });
+        playersListeners.forEach(function(cb){ cb(playersCollSnap()); });
+      }).catch(function(e){ console.error('Poll failed', e); });
+    }
+    setInterval(poll, POLL_MS);
+
+    function sessionDoc(){
+      return {
+        id:'state', path:'session/state',
+        get: function(){ return poll().then(sessionSnap); },
+        set: function(data){ return postJson('/api/session', {op:'set', data:data}).then(poll); },
+        update: function(data){ return postJson('/api/session', {op:'update', data:data}).then(poll); },
+        onSnapshot: function(next){
+          sessionListeners.push(next);
+          next(sessionSnap());
+          return function(){ sessionListeners = sessionListeners.filter(function(f){ return f!==next; }); };
+        }
+      };
+    }
+    function playerDoc(slug){
+      return {
+        id: slug, path: 'players/' + slug,
+        get: function(){ return poll().then(function(){ return playerSnap(slug); }); },
+        set: function(data){ return postJson('/api/player', {op:'set', slug:slug, data:data}).then(poll); },
+        update: function(data){ return postJson('/api/player', {op:'update', slug:slug, data:data}).then(poll); },
+        delete: function(){ return postJson('/api/player', {op:'delete', slug:slug}).then(poll); }
+      };
+    }
+    return {
+      doc: function(path){
+        if (path === 'session/state') return sessionDoc();
+        if (path.indexOf('players/') === 0) return playerDoc(path.slice('players/'.length));
+        throw new Error('Unsupported doc path: ' + path);
+      },
+      collection: function(path){
+        if (path !== 'players') throw new Error('Unsupported collection path: ' + path);
+        return {
+          path:'players',
+          doc: playerDoc,
+          get: function(){ return poll().then(playersCollSnap); },
+          onSnapshot: function(next){
+            playersListeners.push(next);
+            next(playersCollSnap());
+            return function(){ playersListeners = playersListeners.filter(function(f){ return f!==next; }); };
+          }
+        };
+      }
+    };
+  }
+
+  var dbPromise = fetch('/api/data').then(function(r){
+    if (!r.ok) throw new Error('bad status ' + r.status);
+    return r.json();
+  }).then(function(initialData){
+    return createCloudflareDb(initialData);
+  }).catch(function(err){
+    console.warn('Game API not reachable — running in local demo mode. Votes/names will not sync between devices.', err);
+    return createMockDb();
+  });
 
   // ---------- helpers ----------
   function slugify(name){ return name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'player'; }
