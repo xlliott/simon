@@ -74,6 +74,36 @@
     0%,100%{ transform:translate(-50%,-94%); }
     50%{ transform:translate(-50%,-94%) translateY(2%); }
   }
+  /* Classic RPG dialogue box: sits over the bottom of the scene once Simon
+     has arrived, so the reveal itself is seen unobstructed first. */
+  .fact-box{
+    position:absolute; left:4%; right:4%; bottom:4%; z-index:12;
+    background:#141d3d;
+    border:3px solid #f4e9d8;
+    box-shadow:0 0 0 3px #141d3d, 0 0 0 6px #05070f;
+    padding:clamp(8px, 1.4vw, 14px) clamp(10px, 1.6vw, 16px);
+    display:none;
+    /* Anchored to the bottom so it grows upward and can't push past the
+       scene's clipped edge; the cap catches an unusually long fact. */
+    max-height:62%; overflow-y:auto;
+  }
+  /* Opacity only — a transform here gets left behind by the animation's fill
+     state and shunts the box out of the scene, where it gets clipped. */
+  .fact-box.show{ display:block; animation:factIn .25s ease-out both; }
+  @keyframes factIn{
+    from{ opacity:0; }
+    to{ opacity:1; }
+  }
+  .fact-box h3{
+    margin:0 0 8px; color:var(--accent2);
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    font-size:clamp(.5rem, 1.9vw, .7rem); letter-spacing:.5px;
+  }
+  .fact-box p{
+    margin:0; color:#f4e9d8; line-height:1.3;
+    font-family:'VT323', 'Courier New', ui-monospace, monospace;
+    font-size:clamp(.8rem, 2.7vw, 1.3rem);
+  }
   .hotspot{
     position:absolute; z-index:5; border-radius:10px;
     border:2px dashed rgba(255,255,255,0);
@@ -198,6 +228,10 @@
         <div class="stage-wrap" id="stage">
           <div class="room-bg" id="roomBg"></div>
           <div class="sprite" id="sprite"></div>
+          <div class="fact-box" id="factBox">
+            <h3 id="factTitle"></h3>
+            <p id="factText"></p>
+          </div>
           <!-- hotspots injected by JS -->
         </div>
         <div class="reveal-banner hidden" id="revealBanner"></div>
@@ -240,16 +274,26 @@
   "use strict";
 
   var ITEMS = [
-    {name:"Fridge",    img:"assets/sleepwalking-simon-01.JPG", left:8.9,  top:32.3, w:17.9, h:43.9},
-    {name:"Toilet",    img:"assets/sleepwalking-simon-02.JPG", left:53.4, top:20.8, w:8.4,  h:24.1},
-    {name:"Oven",      img:"assets/sleepwalking-simon-03.JPG", left:21.8, top:36.5, w:9.5,  h:18.2},
-    {name:"Door",      img:"assets/sleepwalking-simon-04.JPG", left:0.7,  top:30.0, w:7.6,  h:50.8},
-    {name:"Sink",      img:"assets/sleepwalking-simon-05.JPG", left:29.1, top:24.9, w:10.9, h:34.8},
-    {name:"TV",        img:"assets/sleepwalking-simon-06.JPG", left:24.0, top:65.1, w:13.8, h:20.8},
-    {name:"Wardrobe",  img:"assets/sleepwalking-simon-07.JPG", left:62.9, top:20.3, w:16.9, h:49.4},
-    {name:"Plant",     img:"assets/sleepwalking-simon-08.JPG", left:73.4, top:53.5, w:17.7, h:40.1},
-    {name:"Computer",  img:"assets/sleepwalking-simon-09.JPG", left:79.3, top:35.0, w:15.8, h:33.9},
-    {name:"Window",    img:"assets/sleepwalking-simon-10.JPG", left:78.6, top:8.6,  w:13.7, h:45.4}
+    {name:"Fridge",    img:"assets/sleepwalking-simon-01.JPG", left:8.9,  top:32.3, w:17.9, h:43.9,
+     fact:"Sleep-eating (NS-RED) is surprisingly common; sleepwalkers often head straight to the fridge for high-calorie snacks or odd food combos without ever waking up."},
+    {name:"Toilet",    img:"assets/sleepwalking-simon-02.JPG", left:53.4, top:20.8, w:8.4,  h:24.1,
+     fact:"Sleepwalkers frequently mistake random room corners, closets, or trash cans for the actual toilet."},
+    {name:"Oven",      img:"assets/sleepwalking-simon-03.JPG", left:21.8, top:36.5, w:9.5,  h:18.2,
+     fact:"People have been caught attempting full culinary prep in their sleep, though thankfully they rarely manage to safely light a burner."},
+    {name:"Door",      img:"assets/sleepwalking-simon-04.JPG", left:0.7,  top:30.0, w:7.6,  h:50.8,
+     fact:"Unlocking and exiting the main front door is one of the most dangerous sleepwalking behaviors, often stopped only by deadbolts or keypads."},
+    {name:"Sink",      img:"assets/sleepwalking-simon-05.JPG", left:29.1, top:24.9, w:10.9, h:34.8,
+     fact:"Automatic behaviors like washing hands or mindlessly scrubbing a single dish often trigger mid-slumber at the kitchen basin."},
+    {name:"TV",        img:"assets/sleepwalking-simon-06.JPG", left:24.0, top:65.1, w:13.8, h:20.8,
+     fact:"Turning on electronics or sitting down to \"watch\" a blank screen is a common habit formed by daily muscle memory."},
+    {name:"Wardrobe",  img:"assets/sleepwalking-simon-07.JPG", left:62.9, top:20.3, w:16.9, h:49.4,
+     fact:"Getting completely dressed in full daytime outfits—or trying to hide inside the wardrobe—is a classic sleepwalking trope that happens in real life."},
+    {name:"Plant",     img:"assets/sleepwalking-simon-08.JPG", left:73.4, top:53.5, w:17.7, h:40.1,
+     fact:"Sleepwalkers frequently interact with plants by trying to \"water\" them using whatever liquid is nearby, pruning leaves with their fingers, or even mistaking pot soil for a place to bury or retrieve random objects."},
+    {name:"Computer",  img:"assets/sleepwalking-simon-09.JPG", left:79.3, top:35.0, w:15.8, h:33.9,
+     fact:"Modern sleepwalkers have been known to send nonsensical emails, texts, or online orders while totally unconscious."},
+    {name:"Window",    img:"assets/sleepwalking-simon-10.JPG", left:78.6, top:8.6,  w:13.7, h:45.4,
+     fact:"Sleepwalkers can interact with window latches and curtains because basic motor skills stay active while complex spatial awareness shuts down."}
   ];
   var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
   var EMPTY_ROOM_IMG = "assets/sleepwalking-simon-empty.png";
@@ -508,6 +552,7 @@
   var players = [];
   var myVoteLocal = null;
   var animTimer = null;
+  var factTimer = null;
 
   dbPromise.then(function(db){
     window.__db = db;
@@ -670,6 +715,8 @@
     var banner = el('revealBanner');
     banner.classList.add('hidden');
     clearTimeout(animTimer);
+    clearTimeout(factTimer);
+    el('factBox').classList.remove('show');
 
     if (session.phase === 'lobby' || !session.phase){
       roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
@@ -714,6 +761,15 @@
     banner.innerHTML = 'Simon went to the <b>' + it.name.toUpperCase() + '</b>!<br>' +
       (names.length ? ('Correct: ' + names.join(', ')) : 'Nobody guessed it this time.');
     banner.classList.remove('hidden');
+
+    // Let the arrival scene land on its own for a beat before the fact box
+    // slides up over it.
+    el('factTitle').textContent = it.name.toUpperCase();
+    el('factText').textContent = it.fact;
+    clearTimeout(factTimer);
+    factTimer = setTimeout(function(){
+      el('factBox').classList.add('show');
+    }, 700);
   }
 
   function setHotspots(active){
