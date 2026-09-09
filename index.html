@@ -111,18 +111,10 @@
   .center-screen{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:20px 0; }
   .title-overlay{
     position:absolute; inset:0; z-index:10;
-    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
-    padding-top:8%; gap:5%; pointer-events:none;
+    display:flex; align-items:flex-start; justify-content:center;
+    padding-top:44%; pointer-events:none;
   }
   .title-overlay .btn{ pointer-events:auto; }
-  .game-title{
-    margin:0; text-align:center; line-height:1.5;
-    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
-    font-size:clamp(.85rem, 5.5vw, 1.9rem);
-    text-shadow: 3px 3px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
-  }
-  .game-title .l1{ color:var(--accent2); }
-  .game-title .l2{ color:#7ec8ff; }
   .players-box{
     max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;
   }
@@ -167,9 +159,7 @@
   <div id="screenTitle" class="center-screen">
     <div class="stage-wrap" id="titleStage">
       <div class="room-bg" id="titleRoomBg"></div>
-      <div class="sprite show idle" id="titleSprite"></div>
       <div class="title-overlay">
-        <h1 class="game-title"><span class="l1">Sleepwalking</span><br><span class="l2">Simon</span></h1>
         <button id="btnStart" class="btn primary">Start</button>
       </div>
     </div>
@@ -260,16 +250,13 @@
     {name:"Computer",  img:"assets/sleepwalking-simon-09.JPG", left:79.3, top:35.0, w:15.8, h:33.9},
     {name:"Window",    img:"assets/sleepwalking-simon-10.JPG", left:78.6, top:8.6,  w:13.7, h:45.4}
   ];
+  var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
   var EMPTY_ROOM_IMG = "assets/sleepwalking-simon-empty.png";
   var SIMON_IDLE_IMG = "assets/simon-idle.png";
   var SIMON_WALK_IMG = "assets/simon-walk.png";
   var CENTER_POS = {left:53.97, top:80.2};
 
-  document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
-  var titleSprite = document.getElementById('titleSprite');
-  titleSprite.style.backgroundImage = 'url(' + SIMON_IDLE_IMG + ')';
-  titleSprite.style.left = CENTER_POS.left + '%';
-  titleSprite.style.top = CENTER_POS.top + '%';
+  document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + TITLE_IMG + ')';
 
   var params = new URLSearchParams(location.search);
   var isHost = params.get('host') === '1';
