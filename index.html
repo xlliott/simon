@@ -79,6 +79,10 @@
   .hotspot.active{ border-color:rgba(255,207,77,.55); background:radial-gradient(circle, rgba(255,207,77,.18) 0%, rgba(255,207,77,0) 75%); }
   .hotspot.active:hover{ border-color:rgba(255,207,77,.9); background:radial-gradient(circle, rgba(255,207,77,.32) 0%, rgba(255,207,77,0) 75%); }
   .hotspot.selected{ border-color:var(--accent); background:radial-gradient(circle, rgba(61,220,106,.35) 0%, rgba(61,220,106,0) 75%); }
+  /* Must come after .hotspot.active:hover: equal specificity, so source order
+     decides. Without it, hover keeps painting a picked item yellow until the
+     cursor leaves it. */
+  .hotspot.selected:hover{ border-color:#7dffa6; background:radial-gradient(circle, rgba(61,220,106,.5) 0%, rgba(61,220,106,0) 75%); }
   .hotspot.disabled{ cursor:default; }
   .hotspot .tag{
     position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
