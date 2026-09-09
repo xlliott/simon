@@ -265,13 +265,10 @@
     {name:"Window",    img:"assets/sleepwalking-simon-10.JPG", left:78.6, top:8.6,  w:13.7, h:45.4}
   ];
   var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
-  var BED_ASLEEP_IMG = "assets/sleepwalking-simon-bed-asleep.JPG";
-  var BED_EMPTY_IMG = "assets/sleepwalking-simon-bed-empty.JPG";
+  var EMPTY_ROOM_IMG = "assets/sleepwalking-simon-empty.png";
   var SIMON_IDLE_IMG = "assets/simon-idle.png";
   var SIMON_WALK_IMG = "assets/simon-walk.png";
-  var BED_POS = {left:74, top:88};
   var CENTER_POS = {left:53.97, top:80.2};
-  var WAKE_MS = 2200;
 
   document.documentElement.style.setProperty('--title-img', 'url(' + TITLE_IMG + ')');
 
@@ -594,32 +591,22 @@
     clearTimeout(animTimer);
 
     if (session.phase === 'lobby' || !session.phase){
-      roomBg.style.backgroundImage = 'url(' + BED_ASLEEP_IMG + ')';
-      hideSprite();
+      roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
+      showIdleSprite();
       setHotspots(false);
       return;
     }
 
     if (session.phase === 'active'){
-      roomBg.style.backgroundImage = 'url(' + BED_EMPTY_IMG + ')';
-      var elapsed = session.startedAt ? (Date.now() - new Date(session.startedAt).getTime()) : WAKE_MS;
-      if (elapsed < WAKE_MS){
-        setHotspots(false);
-        var remaining = Math.max(300, WAKE_MS - elapsed);
-        playTransit(BED_POS, CENTER_POS, remaining, function(){
-          showIdleSprite();
-          setHotspots(true);
-        });
-      } else {
-        showIdleSprite();
-        setHotspots(true);
-      }
+      roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
+      showIdleSprite();
+      setHotspots(true);
       return;
     }
 
     if (session.phase === 'revealed'){
       setHotspots(false);
-      roomBg.style.backgroundImage = 'url(' + BED_EMPTY_IMG + ')';
+      roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
       var elapsed2 = session.revealAt ? (Date.now() - new Date(session.revealAt).getTime()) : 999999;
       var WALK_MS = 2000;
       if (session.targetIndex !== null && elapsed2 < WALK_MS){
@@ -660,7 +647,7 @@
     var heading = el('statusHeading'), sub = el('statusSub'), submitBtn = el('btnSubmitVote');
     if (session.phase === 'lobby' || !session.phase){
       heading.textContent = 'Waiting for host…';
-      sub.textContent = 'Simon is asleep. Hang tight!';
+      sub.textContent = 'Simon is sleepwalking. Hang tight!';
       submitBtn.classList.add('hidden');
     } else if (session.phase === 'active'){
       var myVoted = players.find(function(p){ return p.name && slugify(p.name) === mySlug; });
