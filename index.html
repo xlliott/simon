@@ -54,40 +54,18 @@
     transition:opacity .5s ease;
   }
   .room-bg.fade{ opacity:0; }
-  .simon-mask{
-    position:absolute;
-    left:49.42%; top:33.85%; width:9.09%; height:46.35%;
-    background-image:var(--bed-empty-img);
-    background-repeat:no-repeat;
-    background-size: 1100% 216%;
-    background-position: 54.4% 63.1%;
-    z-index:2; display:none;
-  }
-  .simon-mask.show{ display:block; }
-  .simon-idle-crop{
-    position:absolute; left:49.42%; top:33.85%; width:9.09%; height:46.35%;
-    background-image:var(--base-img);
-    background-repeat:no-repeat;
-    background-size: 1100% 216%;
-    background-position: 54.4% 63.1%;
-    z-index:3;
-    animation:idlebob 1.6s ease-in-out infinite;
-    display:none;
-  }
-  .simon-idle-crop.show{ display:block; }
-  @keyframes idlebob{
-    0%,100%{ transform:translateY(0); }
-    50%{ transform:translateY(2.2%); }
-  }
   .sprite{
-    position:absolute; width:6.2%; aspect-ratio: 14/26;
-    z-index:4; display:none; transform:translate(-50%,-92%);
+    position:absolute; height:32%; aspect-ratio:1/1;
+    z-index:4; display:none; transform:translate(-50%,-94%);
     transition:left 1s linear, top 1s linear;
+    background-repeat:no-repeat; background-size:contain; background-position:center bottom;
   }
   .sprite.show{ display:block; }
-  .sprite svg{ width:100%; height:100%; display:block; }
-  .sprite.step .legs{ animation:step .38s steps(2) infinite; }
-  @keyframes step{ 0%{transform:translateX(0)} 50%{transform:translateX(-6%)} 100%{transform:translateX(0)} }
+  .sprite.idle{ animation:idlebob 1.6s ease-in-out infinite; }
+  @keyframes idlebob{
+    0%,100%{ transform:translate(-50%,-94%); }
+    50%{ transform:translate(-50%,-94%) translateY(2%); }
+  }
   .hotspot{
     position:absolute; z-index:5; border-radius:10px;
     border:2px dashed rgba(255,255,255,0);
@@ -156,12 +134,18 @@
     max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;
   }
   .player-row{
-    display:flex; justify-content:space-between; gap:10px; font-size:.78rem;
+    display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:.78rem;
     background:#0d0812; border:2px solid var(--border); border-radius:5px; padding:6px 10px;
   }
+  .player-row > span:first-child{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .player-row .score{ color:var(--accent2); }
   .player-row.correct{ outline:2px solid var(--accent); }
   .player-row.wrong{ opacity:.55; }
+  .remove-player{
+    font-family:inherit; background:none; border:none; color:var(--ink-dim);
+    font-size:.9rem; line-height:1; padding:2px 4px; cursor:pointer;
+  }
+  .remove-player:hover{ color:var(--danger); }
   .muted{ color:var(--ink-dim); font-size:.78rem; text-align:center; }
   .layout{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; justify-content:center; }
   .stage-col{ flex:2 1 520px; min-width:280px; max-width:900px; }
@@ -212,8 +196,6 @@
       <div class="stage-col">
         <div class="stage-wrap" id="stage">
           <div class="room-bg" id="roomBg"></div>
-          <div class="simon-mask" id="mask"></div>
-          <div class="simon-idle-crop" id="idleCrop"></div>
           <div class="sprite" id="sprite"></div>
           <!-- hotspots injected by JS -->
         </div>
@@ -278,17 +260,16 @@
     {name:"Computer",  img:"assets/sleepwalking-simon-09.JPG", left:79.3, top:35.0, w:15.8, h:33.9},
     {name:"Window",    img:"assets/sleepwalking-simon-10.JPG", left:78.6, top:8.6,  w:13.7, h:45.4}
   ];
-  var BASE_IMG = "assets/sleepwalking-simon-base.JPG";
   var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
   var BED_ASLEEP_IMG = "assets/sleepwalking-simon-bed-asleep.JPG";
   var BED_EMPTY_IMG = "assets/sleepwalking-simon-bed-empty.JPG";
+  var SIMON_IDLE_IMG = "assets/simon-idle.png";
+  var SIMON_WALK_IMG = "assets/simon-walk.png";
   var BED_POS = {left:74, top:88};
   var CENTER_POS = {left:53.97, top:80.2};
   var WAKE_MS = 2200;
 
-  document.documentElement.style.setProperty('--base-img', 'url(' + BASE_IMG + ')');
   document.documentElement.style.setProperty('--title-img', 'url(' + TITLE_IMG + ')');
-  document.documentElement.style.setProperty('--bed-empty-img', 'url(' + BED_EMPTY_IMG + ')');
 
   var params = new URLSearchParams(location.search);
   var isHost = params.get('host') === '1';
@@ -371,23 +352,6 @@
   function nowIso(){ return new Date().toISOString(); }
   function el(id){ return document.getElementById(id); }
 
-  function svgSimon(stepClass){
-    return '<svg viewBox="0 0 14 26" xmlns="http://www.w3.org/2000/svg">' +
-      '<ellipse cx="7" cy="25" rx="5" ry="1.2" fill="#000" opacity=".35"/>' +
-      '<g class="legs' + (stepClass?(' '+stepClass):'') + '">' +
-        '<rect x="4" y="16" width="2.6" height="8" fill="#274b8c"/>' +
-        '<rect x="7.4" y="16" width="2.6" height="8" fill="#2c5497"/>' +
-        '<rect x="3.6" y="23" width="3.2" height="1.6" fill="#8bd3ff"/>' +
-        '<rect x="7.2" y="23" width="3.2" height="1.6" fill="#8bd3ff"/>' +
-      '</g>' +
-      '<rect x="3" y="8" width="8" height="9" rx="1.5" fill="#3363b0"/>' +
-      '<rect x="-1" y="8.5" width="4.2" height="2.6" rx="1" fill="#3363b0" transform="translate(4,3)"/>' +
-      '<rect x="0.5" y="9" width="5" height="2.4" rx="1" fill="#2c5497"/>' +
-      '<rect x="8.5" y="9" width="5" height="2.4" rx="1" fill="#2c5497"/>' +
-      '<circle cx="7" cy="4.6" r="4" fill="#e7b78c"/>' +
-      '<path d="M3 4.2 Q7 -1 11 4.2 Q11 2 7 1.4 Q3 2 3 4.2 Z" fill="#4a3324"/>' +
-      '</svg>';
-  }
   // ---------- build hotspots ----------
   var stage = el('stage');
   var hotspotEls = ITEMS.map(function(item, i){
@@ -497,6 +461,12 @@
       });
     });
 
+    el('playersBox').addEventListener('click', function(e){
+      var btn = e.target.closest('.remove-player'); if (!btn || !isHost) return;
+      if (!confirm('Remove this player from the game?')) return;
+      db.doc('players/' + btn.dataset.slug).delete();
+    });
+
     targetGrid.addEventListener('click', function(e){
       var btn = e.target.closest('button'); if (!btn) return;
       db.doc('session/state').update({ targetIndex: Number(btn.dataset.index) });
@@ -542,21 +512,50 @@
     return { left: it.left + it.w/2, top: it.top + it.h*0.75 };
   }
 
+  var walkFrameTimer = null;
+  function startWalkFrames(sprite){
+    var frame = 0;
+    clearInterval(walkFrameTimer);
+    sprite.style.backgroundImage = 'url(' + SIMON_WALK_IMG + ')';
+    walkFrameTimer = setInterval(function(){
+      frame = 1 - frame;
+      sprite.style.backgroundImage = 'url(' + (frame ? SIMON_WALK_IMG : SIMON_IDLE_IMG) + ')';
+    }, 260);
+  }
+  function stopWalkFrames(){
+    clearInterval(walkFrameTimer);
+    walkFrameTimer = null;
+  }
+
   function playTransit(fromPos, toPos, durationMs, onDone){
     var sprite = el('sprite');
-    sprite.innerHTML = svgSimon('walk');
-    sprite.classList.add('show','step');
-    setSpritePos(fromPos);
+    sprite.classList.remove('idle');
+    sprite.classList.add('show');
     sprite.style.transition = 'none';
-    // force reflow so the transition applies on the next frame
-    void sprite.offsetWidth;
+    setSpritePos(fromPos);
+    void sprite.offsetWidth; // force reflow so the transition applies on the next frame
     sprite.style.transition = 'left ' + durationMs + 'ms linear, top ' + durationMs + 'ms linear';
+    startWalkFrames(sprite);
     requestAnimationFrame(function(){ setSpritePos(toPos); });
     clearTimeout(animTimer);
     animTimer = setTimeout(function(){
-      sprite.classList.remove('show','step');
+      stopWalkFrames();
       if (onDone) onDone();
     }, durationMs + 30);
+  }
+
+  function showIdleSprite(){
+    var sprite = el('sprite');
+    stopWalkFrames();
+    sprite.style.transition = 'none';
+    setSpritePos(CENTER_POS);
+    sprite.style.backgroundImage = 'url(' + SIMON_IDLE_IMG + ')';
+    sprite.classList.add('show','idle');
+  }
+
+  function hideSprite(){
+    stopWalkFrames();
+    el('sprite').classList.remove('show','idle');
   }
 
   var lastPhaseKey = '';
@@ -570,59 +569,47 @@
     lastPhaseKey = phaseKey;
 
     var roomBg = el('roomBg');
-    var mask = el('mask');
-    var idle = el('idleCrop');
     var banner = el('revealBanner');
     banner.classList.add('hidden');
     clearTimeout(animTimer);
 
     if (session.phase === 'lobby' || !session.phase){
       roomBg.style.backgroundImage = 'url(' + BED_ASLEEP_IMG + ')';
-      mask.classList.remove('show');
-      idle.classList.remove('show');
-      el('sprite').classList.remove('show','step');
+      hideSprite();
       setHotspots(false);
       return;
     }
 
     if (session.phase === 'active'){
+      roomBg.style.backgroundImage = 'url(' + BED_EMPTY_IMG + ')';
       var elapsed = session.startedAt ? (Date.now() - new Date(session.startedAt).getTime()) : WAKE_MS;
-      idle.classList.remove('show');
       if (elapsed < WAKE_MS){
-        roomBg.style.backgroundImage = 'url(' + BED_EMPTY_IMG + ')';
-        mask.classList.add('show');
         setHotspots(false);
         var remaining = Math.max(300, WAKE_MS - elapsed);
         playTransit(BED_POS, CENTER_POS, remaining, function(){
-          roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
-          idle.classList.add('show');
+          showIdleSprite();
           setHotspots(true);
         });
       } else {
-        roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
-        mask.classList.add('show');
-        el('sprite').classList.remove('show','step');
-        idle.classList.add('show');
+        showIdleSprite();
         setHotspots(true);
       }
       return;
     }
 
     if (session.phase === 'revealed'){
-      idle.classList.remove('show');
       setHotspots(false);
+      roomBg.style.backgroundImage = 'url(' + BED_EMPTY_IMG + ')';
       var elapsed2 = session.revealAt ? (Date.now() - new Date(session.revealAt).getTime()) : 999999;
       var WALK_MS = 2000;
       if (session.targetIndex !== null && elapsed2 < WALK_MS){
-        roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
-        mask.classList.add('show');
         var remaining2 = Math.max(300, WALK_MS - elapsed2);
         playTransit(CENTER_POS, itemPos(session.targetIndex), remaining2, function(){
-          mask.classList.remove('show');
+          hideSprite();
           showTargetImage();
         });
       } else {
-        mask.classList.remove('show');
+        hideSprite();
         showTargetImage();
       }
       return;
@@ -684,7 +671,9 @@
       var mark = '';
       if (session.phase === 'active') mark = votedThisRound ? '✓' : '…';
       if (showResult) mark = votedThisRound ? (correct ? '✓' : '✗') : '–';
-      row.innerHTML = '<span>' + escapeHtml(p.name) + (session.phase!=='lobby' ? ' <span class="muted">'+mark+'</span>' : '') + '</span><span class="score">' + (p.score||0) + '</span>';
+      row.innerHTML = '<span>' + escapeHtml(p.name) + (session.phase!=='lobby' ? ' <span class="muted">'+mark+'</span>' : '') + '</span>' +
+        '<span class="score">' + (p.score||0) + '</span>' +
+        (isHost ? '<button class="remove-player" data-slug="'+slugify(p.name)+'" title="Remove player" aria-label="Remove '+escapeHtml(p.name)+'">×</button>' : '');
       box.appendChild(row);
     });
   }
