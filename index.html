@@ -331,7 +331,12 @@
     if (configured && window.firebase){
       try{
         firebase.initializeApp(FIREBASE_CONFIG);
-        return Promise.resolve(firebase.firestore());
+        var firestore = firebase.firestore();
+        // Some corporate networks block Firestore's persistent streaming
+        // connection but allow plain HTTP long-polling — auto-detect and
+        // fall back to that so the game still syncs on locked-down wifi.
+        firestore.settings({ experimentalAutoDetectLongPolling: true });
+        return Promise.resolve(firestore);
       }catch(e){
         console.error('Firebase init failed, falling back to local-only demo mode.', e);
       }
