@@ -249,8 +249,10 @@
   ];
   var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
   var EMPTY_ROOM_IMG = "assets/sleepwalking-simon-empty.png";
-  var SIMON_IDLE_IMG = "assets/simon-idle.png";
-  var SIMON_WALK_IMG = "assets/simon-walk.png";
+  // ?v= bumped whenever a sprite is re-exported under the same filename, so
+  // browsers holding the previous version fetch the new one.
+  var SIMON_IDLE_IMG = "assets/simon-idle.png?v=2";
+  var SIMON_WALK_IMG = "assets/simon-walk.png?v=2";
   var CENTER_POS = {left:53.97, top:80.2};
 
   document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + TITLE_IMG + ')';
