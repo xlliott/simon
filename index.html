@@ -1,0 +1,730 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sleepwalking Simon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wood:#3a2a1f;
+    --floor:#6b4a34;
+    --floor2:#5a3d2b;
+    --panel-bg:#1b1420;
+    --panel-bg-light:#2a2036;
+    --ink:#f4e9d8;
+    --ink-dim:#c9b8a6;
+    --accent:#3ddc6a;
+    --accent2:#ffcf4d;
+    --danger:#ff5d5d;
+    --border:#0f0a12;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:#120c17; color:var(--ink);
+    font-family:'VT323', 'Courier New', ui-monospace, monospace;
+    font-size:18px;
+    min-height:100vh;
+  }
+  .pixelfont{
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  button{
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    cursor:pointer; letter-spacing:.5px;
+    text-transform:uppercase; font-weight:normal;
+  }
+  .app{
+    max-width:1100px; margin:0 auto; padding:16px;
+    display:flex; flex-direction:column; gap:14px;
+  }
+  h1{ text-align:center; margin:6px 0 0; font-size:1.3rem; color:var(--accent2); line-height:1.6; }
+  .stage-wrap{
+    position:relative; width:100%; max-width:900px; margin:0 auto;
+    aspect-ratio: 1376 / 768; border-radius:6px; overflow:hidden;
+    border:4px solid var(--border);
+    box-shadow:0 0 0 2px #000, 0 12px 28px rgba(0,0,0,.55);
+    background:#000;
+    image-rendering:pixelated;
+  }
+  .room-bg{
+    position:absolute; inset:0; background-size:cover; background-position:center;
+    transition:opacity .5s ease;
+  }
+  .room-bg.fade{ opacity:0; }
+  .simon-mask{
+    position:absolute;
+    left:49.42%; top:33.85%; width:9.09%; height:46.35%;
+    background:
+      linear-gradient(90deg, rgba(0,0,0,.05) 0 2px, transparent 2px 100%) ,
+      linear-gradient(var(--floor), var(--floor2));
+    background-size: 14px 100%, 100% 100%;
+    z-index:2;
+  }
+  .simon-idle-crop{
+    position:absolute; left:49.42%; top:33.85%; width:9.09%; height:46.35%;
+    background-image:var(--base-img);
+    background-repeat:no-repeat;
+    background-size: 1100% 216%;
+    background-position: 54.4% 63.1%;
+    z-index:3;
+    animation:idlebob 1.6s ease-in-out infinite;
+    display:none;
+  }
+  .simon-idle-crop.show{ display:block; }
+  @keyframes idlebob{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(2.2%); }
+  }
+  .bed{
+    position:absolute; left:2%; top:58%; width:19%; height:28%;
+    z-index:2; transition:opacity .6s ease, transform .6s ease;
+  }
+  .bed.hide{ opacity:0; transform:translateY(6%); pointer-events:none; }
+  .bed svg{ width:100%; height:100%; display:block; }
+  .sprite{
+    position:absolute; width:6.2%; aspect-ratio: 14/26;
+    z-index:4; display:none; transform:translate(-50%,-92%);
+    transition:left 1s linear, top 1s linear;
+  }
+  .sprite.show{ display:block; }
+  .sprite svg{ width:100%; height:100%; display:block; }
+  .sprite.step .legs{ animation:step .38s steps(2) infinite; }
+  @keyframes step{ 0%{transform:translateX(0)} 50%{transform:translateX(-6%)} 100%{transform:translateX(0)} }
+  .hotspot{
+    position:absolute; z-index:5; border-radius:10px;
+    border:2px dashed rgba(255,255,255,0);
+    background:radial-gradient(circle, rgba(255,207,77,0) 0%, rgba(255,207,77,0) 100%);
+    cursor:pointer; transition:background .15s, border-color .15s;
+  }
+  .hotspot.active{ border-color:rgba(255,207,77,.55); background:radial-gradient(circle, rgba(255,207,77,.18) 0%, rgba(255,207,77,0) 75%); }
+  .hotspot.active:hover{ border-color:rgba(255,207,77,.9); background:radial-gradient(circle, rgba(255,207,77,.32) 0%, rgba(255,207,77,0) 75%); }
+  .hotspot.selected{ border-color:var(--accent); background:radial-gradient(circle, rgba(61,220,106,.35) 0%, rgba(61,220,106,0) 75%); }
+  .hotspot.disabled{ cursor:default; }
+  .hotspot .tag{
+    position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+    font-size:9px; background:#000c; padding:1px 5px; border-radius:4px; white-space:nowrap;
+    opacity:0; transition:opacity .15s;
+  }
+  .hotspot.active:hover .tag, .hotspot.selected .tag{ opacity:1; }
+
+  .panel{
+    background:var(--panel-bg); border:3px solid var(--border); border-radius:8px;
+    padding:12px 14px; box-shadow:inset 0 0 0 1px #000;
+  }
+  .panel h2{
+    margin:0 0 8px; font-size:.72rem; color:var(--accent2);
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    letter-spacing:.5px;
+  }
+  #statusHeading{
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    font-size:.72rem; letter-spacing:.5px; margin:0 0 8px; color:var(--accent2);
+  }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center; }
+  .btn{
+    background:var(--panel-bg-light); color:var(--ink); border:3px solid var(--border);
+    border-radius:6px; padding:10px 16px; font-size:.62rem; line-height:1.4;
+    box-shadow:0 3px 0 var(--border);
+  }
+  .btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--border); }
+  .btn.primary{ background:var(--accent); color:#062;  }
+  .btn.gold{ background:var(--accent2); color:#5a3d00; }
+  .btn.danger{ background:var(--danger); color:#3a0000; }
+  .btn:disabled{ opacity:.4; cursor:default; }
+  input[type=text]{
+    font-family:inherit; font-size:.9rem; padding:10px 12px; border-radius:6px;
+    border:3px solid var(--border); background:#0d0812; color:var(--ink); text-align:center;
+  }
+  .center-screen{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:20px 0; }
+  .title-art{
+    position:relative;
+    width:100%; max-width:640px; aspect-ratio:1376/768; background-image:var(--title-img);
+    background-size:cover; background-position:center; border-radius:6px;
+    border:4px solid var(--border); box-shadow:0 0 0 2px #000;
+  }
+  .title-mask{
+    position:absolute; z-index:1; border-radius:6%;
+    background:linear-gradient(var(--floor), var(--floor2));
+  }
+  .title-start-btn{
+    position:absolute; z-index:2; background:transparent; border:none; padding:0;
+    cursor:pointer; border-radius:14%;
+  }
+  .title-start-btn:hover, .title-start-btn:focus-visible{
+    box-shadow:0 0 22px 6px rgba(61,220,106,.6);
+    outline:none;
+  }
+  .players-box{
+    max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;
+  }
+  .player-row{
+    display:flex; justify-content:space-between; gap:10px; font-size:.78rem;
+    background:#0d0812; border:2px solid var(--border); border-radius:5px; padding:6px 10px;
+  }
+  .player-row .score{ color:var(--accent2); }
+  .player-row.correct{ outline:2px solid var(--accent); }
+  .player-row.wrong{ opacity:.55; }
+  .muted{ color:var(--ink-dim); font-size:.78rem; text-align:center; }
+  .layout{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; justify-content:center; }
+  .stage-col{ flex:2 1 520px; min-width:280px; max-width:900px; }
+  .side{ flex:1 1 260px; max-width:320px; display:flex; flex-direction:column; gap:12px; }
+  .target-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .target-grid button{
+    background:var(--panel-bg-light); color:var(--ink); border:2px solid var(--border);
+    border-radius:5px; padding:8px 4px; font-size:.55rem;
+  }
+  .target-grid button.picked{ background:var(--accent2); color:#5a3d00; }
+  .reveal-banner{
+    text-align:center; font-size:.95rem; color:var(--accent2); padding:6px 0;
+  }
+  .badge{
+    display:inline-block; font-size:.65rem; padding:2px 8px; border-radius:10px;
+    background:var(--panel-bg-light); border:1px solid var(--border); margin-left:6px;
+  }
+  .hidden{ display:none !important; }
+  footer{ text-align:center; font-size:.65rem; color:var(--ink-dim); padding:10px 0 20px; }
+</style>
+
+<div class="app">
+  <h1 class="pixelfont">🛌 Sleepwalking Simon <span id="hostBadge" class="badge hidden">host view</span></h1>
+
+  <!-- TITLE SCREEN -->
+  <div id="screenTitle" class="center-screen">
+    <div class="title-art">
+      <div class="title-mask" style="left:42.9%; top:74.9%; width:14.5%; height:7.8%;"></div>
+      <div class="title-mask" style="left:42.9%; top:84.6%; width:14.5%; height:7.2%;"></div>
+      <button id="btnStart" class="title-start-btn" style="left:41.4%; top:57.3%; width:18.9%; height:13.7%;" aria-label="Start"></button>
+    </div>
+  </div>
+
+  <!-- NAME ENTRY -->
+  <div id="screenName" class="center-screen hidden">
+    <div class="panel" style="max-width:360px; width:100%;">
+      <h2>Who's sleepwalking with us?</h2>
+      <div class="row" style="flex-direction:column;">
+        <input id="nameInput" type="text" placeholder="Your name" maxlength="24" />
+        <button id="btnSubmitName" class="btn primary">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME (lobby / active / revealed) -->
+  <div id="screenGame" class="hidden">
+    <div class="layout">
+      <div class="stage-col">
+        <div class="stage-wrap" id="stage">
+          <div class="room-bg" id="roomBg"></div>
+          <div class="simon-mask"></div>
+          <div class="simon-idle-crop" id="idleCrop"></div>
+          <div class="bed" id="bed"></div>
+          <div class="sprite" id="sprite"></div>
+          <!-- hotspots injected by JS -->
+        </div>
+        <div class="reveal-banner hidden" id="revealBanner"></div>
+      </div>
+      <div class="side">
+        <div class="panel" id="voteVotePanel">
+          <h2 id="statusHeading">Waiting for host…</h2>
+          <p class="muted" id="statusSub"></p>
+          <div class="row" id="voteControls" style="justify-content:center;">
+            <button id="btnSubmitVote" class="btn gold hidden">Submit Vote</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Team</h2>
+          <div class="players-box" id="playersBox"></div>
+        </div>
+        <div class="panel hidden" id="hostPanel">
+          <h2>Host Controls</h2>
+          <div class="row">
+            <button id="btnStartRound" class="btn primary">Start Round</button>
+            <button id="btnReveal" class="btn danger" disabled>Reveal</button>
+          </div>
+          <p class="muted" id="hostPhaseNote"></p>
+          <h2 style="margin-top:10px;">Pick tonight's target <span class="muted" style="text-transform:none;">(hidden from team)</span></h2>
+          <div class="target-grid" id="targetGrid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Sprint fact: sleepwalking (somnambulism) usually happens during deep non-REM sleep, early in the night.</footer>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // Paste your Firebase project's config here (Firebase console > Project
+  // settings > General > Your apps > SDK setup and configuration).
+  // These values are public identifiers, not secrets — safe to commit.
+  var FIREBASE_CONFIG = {
+    apiKey: "PASTE_API_KEY",
+    authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+    projectId: "PASTE_PROJECT_ID",
+    storageBucket: "PASTE_PROJECT_ID.appspot.com",
+    messagingSenderId: "PASTE_SENDER_ID",
+    appId: "PASTE_APP_ID"
+  };
+
+  var ITEMS = [
+    {name:"Fridge",    img:"assets/sleepwalking-simon-01.JPG", left:8.9,  top:32.3, w:17.9, h:43.9},
+    {name:"Toilet",    img:"assets/sleepwalking-simon-02.JPG", left:53.4, top:20.8, w:8.4,  h:24.1},
+    {name:"Oven",      img:"assets/sleepwalking-simon-03.JPG", left:21.8, top:36.5, w:9.5,  h:18.2},
+    {name:"Door",      img:"assets/sleepwalking-simon-04.JPG", left:0.7,  top:30.0, w:7.6,  h:50.8},
+    {name:"Sink",      img:"assets/sleepwalking-simon-05.JPG", left:29.1, top:24.9, w:10.9, h:34.8},
+    {name:"TV",        img:"assets/sleepwalking-simon-06.JPG", left:24.0, top:65.1, w:13.8, h:20.8},
+    {name:"Wardrobe",  img:"assets/sleepwalking-simon-07.JPG", left:62.9, top:20.3, w:16.9, h:49.4},
+    {name:"Plant",     img:"assets/sleepwalking-simon-08.JPG", left:73.4, top:53.5, w:17.7, h:40.1},
+    {name:"Computer",  img:"assets/sleepwalking-simon-09.JPG", left:79.3, top:35.0, w:15.8, h:33.9},
+    {name:"Window",    img:"assets/sleepwalking-simon-10.JPG", left:78.6, top:8.6,  w:13.7, h:45.4}
+  ];
+  var BASE_IMG = "assets/sleepwalking-simon-base.JPG";
+  var TITLE_IMG = "assets/sleepwalking-simon-title.JPG";
+  var BED_POS = {left:9, top:75};
+  var CENTER_POS = {left:53.97, top:80.2};
+  var WAKE_MS = 2200;
+
+  document.documentElement.style.setProperty('--base-img', 'url(' + BASE_IMG + ')');
+  document.documentElement.style.setProperty('--title-img', 'url(' + TITLE_IMG + ')');
+
+  var params = new URLSearchParams(location.search);
+  var isHost = params.get('host') === '1';
+  if (isHost) document.getElementById('hostBadge').classList.remove('hidden');
+
+  // ---------- tiny local fallback "db" for offline/preview testing ----------
+  function createMockDb(){
+    var store = {}; var docListeners = {}; var collListeners = {};
+    function segs(p){ return p.split('/').filter(Boolean); }
+    function parentColl(p){ var s = segs(p); s.pop(); return s.join('/'); }
+    function docSnap(p){
+      var data = store[p];
+      return { id: segs(p).pop(), exists: data !== undefined,
+        data: function(){ return data; },
+        metadata:{fromCache:false, hasPendingWrites:false} };
+    }
+    function collSnap(cp){
+      var prefix = cp === '' ? '' : cp + '/';
+      var depth = segs(cp).length + 1;
+      var docs = Object.keys(store).filter(function(p){
+        return p.indexOf(prefix) === 0 && segs(p).length === depth;
+      }).map(docSnap);
+      return { docs: docs, size: docs.length, empty: docs.length === 0,
+        docChanges: function(){ return []; },
+        metadata:{fromCache:false, hasPendingWrites:false} };
+    }
+    function notify(p){
+      (docListeners[p] || []).forEach(function(cb){ cb(docSnap(p)); });
+      var cp = parentColl(p);
+      (collListeners[cp] || []).forEach(function(cb){ cb(collSnap(cp)); });
+    }
+    function makeDoc(p){
+      return {
+        id: segs(p).pop(), path: p,
+        get: function(){ return Promise.resolve(docSnap(p)); },
+        set: function(data){ store[p] = data; notify(p); return Promise.resolve(); },
+        update: function(data){ store[p] = Object.assign({}, store[p] || {}, data); notify(p); return Promise.resolve(); },
+        delete: function(){ delete store[p]; notify(p); return Promise.resolve(); },
+        onSnapshot: function(next){
+          docListeners[p] = docListeners[p] || [];
+          docListeners[p].push(next);
+          next(docSnap(p));
+          return function(){ docListeners[p] = docListeners[p].filter(function(f){return f!==next;}); };
+        }
+      };
+    }
+    function makeColl(p){
+      return {
+        path: p,
+        doc: function(id){ return makeDoc(p + '/' + (id || Math.random().toString(36).slice(2))); },
+        get: function(){ return Promise.resolve(collSnap(p)); },
+        onSnapshot: function(next){
+          collListeners[p] = collListeners[p] || [];
+          collListeners[p].push(next);
+          next(collSnap(p));
+          return function(){ collListeners[p] = collListeners[p].filter(function(f){return f!==next;}); };
+        }
+      };
+    }
+    return { doc: makeDoc, collection: makeColl, __mock:true };
+  }
+
+  var dbPromise = (function(){
+    var configured = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE_') !== 0;
+    if (configured && window.firebase){
+      try{
+        firebase.initializeApp(FIREBASE_CONFIG);
+        return Promise.resolve(firebase.firestore());
+      }catch(e){
+        console.error('Firebase init failed, falling back to local-only demo mode.', e);
+      }
+    } else {
+      console.warn('No Firebase config set — running in local demo mode. Votes/names will not sync between devices until you paste your Firebase config at the top of the script.');
+    }
+    return Promise.resolve(createMockDb());
+  })();
+
+  // ---------- helpers ----------
+  function slugify(name){ return name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'player'; }
+  function nowIso(){ return new Date().toISOString(); }
+  function el(id){ return document.getElementById(id); }
+
+  function svgSimon(stepClass){
+    return '<svg viewBox="0 0 14 26" xmlns="http://www.w3.org/2000/svg">' +
+      '<ellipse cx="7" cy="25" rx="5" ry="1.2" fill="#000" opacity=".35"/>' +
+      '<g class="legs' + (stepClass?(' '+stepClass):'') + '">' +
+        '<rect x="4" y="16" width="2.6" height="8" fill="#274b8c"/>' +
+        '<rect x="7.4" y="16" width="2.6" height="8" fill="#2c5497"/>' +
+        '<rect x="3.6" y="23" width="3.2" height="1.6" fill="#8bd3ff"/>' +
+        '<rect x="7.2" y="23" width="3.2" height="1.6" fill="#8bd3ff"/>' +
+      '</g>' +
+      '<rect x="3" y="8" width="8" height="9" rx="1.5" fill="#3363b0"/>' +
+      '<rect x="-1" y="8.5" width="4.2" height="2.6" rx="1" fill="#3363b0" transform="translate(4,3)"/>' +
+      '<rect x="0.5" y="9" width="5" height="2.4" rx="1" fill="#2c5497"/>' +
+      '<rect x="8.5" y="9" width="5" height="2.4" rx="1" fill="#2c5497"/>' +
+      '<circle cx="7" cy="4.6" r="4" fill="#e7b78c"/>' +
+      '<path d="M3 4.2 Q7 -1 11 4.2 Q11 2 7 1.4 Q3 2 3 4.2 Z" fill="#4a3324"/>' +
+      '</svg>';
+  }
+  function svgBed(){
+    return '<svg viewBox="0 0 60 34" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="2" y="6" width="52" height="24" rx="2" fill="#4a3324" stroke="#241a12" stroke-width="1"/>' +
+      '<rect x="5" y="9" width="46" height="18" rx="1" fill="#274b8c"/>' +
+      '<rect x="5" y="9" width="46" height="7" fill="#8bd3ff" opacity=".9"/>' +
+      '<rect x="0" y="4" width="6" height="26" fill="#241a12"/>' +
+      '<rect x="54" y="4" width="6" height="26" fill="#241a12"/>' +
+      '<g id="lump">' +
+        '<ellipse cx="18" cy="16" rx="9" ry="6" fill="#3363b0"/>' +
+        '<circle cx="10" cy="13" r="3.4" fill="#e7b78c"/>' +
+        '<path d="M7 12 Q10 8 13.5 12 Q13 10 10 9.6 Q7 10 7 12 Z" fill="#4a3324"/>' +
+      '</g>' +
+      '</svg>';
+  }
+
+  el('bed').innerHTML = svgBed();
+  var lumpEl; // set after DOM ready
+
+  // ---------- build hotspots ----------
+  var stage = el('stage');
+  var hotspotEls = ITEMS.map(function(item, i){
+    var d = document.createElement('div');
+    d.className = 'hotspot';
+    d.style.left = item.left + '%';
+    d.style.top = item.top + '%';
+    d.style.width = item.w + '%';
+    d.style.height = item.h + '%';
+    d.dataset.index = i;
+    d.innerHTML = '<span class="tag">' + item.name + '</span>';
+    stage.appendChild(d);
+    return d;
+  });
+
+  var targetGrid = el('targetGrid');
+  ITEMS.forEach(function(item, i){
+    var b = document.createElement('button');
+    b.textContent = item.name;
+    b.dataset.index = i;
+    targetGrid.appendChild(b);
+  });
+
+  // ---------- screens ----------
+  function showScreen(name){
+    ['screenTitle','screenName','screenGame'].forEach(function(s){
+      el(s).classList.toggle('hidden', s !== name);
+    });
+  }
+
+  var myName = localStorage.getItem('sw-simon-name') || '';
+  var mySlug = myName ? slugify(myName) : null;
+
+  el('btnStart').addEventListener('click', function(){
+    if (isHost){ showScreen('screenGame'); return; }
+    if (myName){ el('nameInput').value = myName; }
+    showScreen('screenName');
+  });
+
+  el('btnSubmitName').addEventListener('click', submitName);
+  el('nameInput').addEventListener('keydown', function(e){ if (e.key === 'Enter') submitName(); });
+
+  function submitName(){
+    var v = el('nameInput').value.trim();
+    if (!v) return;
+    myName = v; mySlug = slugify(v);
+    localStorage.setItem('sw-simon-name', v);
+    dbPromise.then(function(db){
+      return db.doc('players/' + mySlug).get().then(function(snap){
+        var prev = snap.data();
+        return db.doc('players/' + mySlug).set({
+          name: myName,
+          score: prev ? (prev.score || 0) : 0,
+          joinedAt: prev ? prev.joinedAt : nowIso(),
+          roundId: prev ? prev.roundId : null,
+          vote: prev ? prev.vote : null
+        });
+      });
+    }).then(function(){
+      showScreen('screenGame');
+    });
+  }
+
+  if (isHost){
+    el('hostPanel').classList.remove('hidden');
+    el('voteVotePanel').classList.add('hidden');
+    showScreen('screenGame');
+  }
+
+  // ---------- live state ----------
+  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null };
+  var players = [];
+  var myVoteLocal = null;
+  var animTimer = null;
+
+  dbPromise.then(function(db){
+    window.__db = db;
+
+    db.doc('session/state').onSnapshot(function(snap){
+      var d = snap.data() || {};
+      var newRoundId = d.roundId || null;
+      if (newRoundId !== session.roundId){
+        myVoteLocal = null;
+        hotspotEls.forEach(function(h){ h.classList.remove('selected'); });
+      }
+      session = {
+        phase: d.phase || 'lobby',
+        roundId: newRoundId,
+        targetIndex: (typeof d.targetIndex === 'number') ? d.targetIndex : null,
+        startedAt: d.startedAt || null,
+        revealAt: d.revealAt || null
+      };
+      render();
+    });
+
+    db.collection('players').onSnapshot(function(qs){
+      players = qs.docs.map(function(d){ return d.data(); }).filter(Boolean);
+      players.sort(function(a,b){ return (a.joinedAt||'').localeCompare(b.joinedAt||''); });
+      render();
+    });
+
+    el('btnStartRound').addEventListener('click', function(){
+      var rid = String(Date.now());
+      db.doc('session/state').set({
+        phase:'active', roundId: rid, targetIndex:null,
+        startedAt: nowIso(), revealAt:null
+      });
+    });
+
+    targetGrid.addEventListener('click', function(e){
+      var btn = e.target.closest('button'); if (!btn) return;
+      db.doc('session/state').update({ targetIndex: Number(btn.dataset.index) });
+    });
+
+    el('btnReveal').addEventListener('click', function(){
+      if (session.targetIndex === null) return;
+      var correctIdx = session.targetIndex;
+      var updates = players
+        .filter(function(p){ return p.roundId === session.roundId && p.vote === correctIdx; })
+        .map(function(p){
+          return db.doc('players/' + slugify(p.name)).update({ score: (p.score||0) + 1 });
+        });
+      Promise.all(updates).then(function(){
+        return db.doc('session/state').update({ phase:'revealed', revealAt: nowIso() });
+      });
+    });
+
+    hotspotEls.forEach(function(hEl, i){
+      hEl.addEventListener('click', function(){
+        if (isHost || session.phase !== 'active' || !mySlug) return;
+        hotspotEls.forEach(function(x){ x.classList.remove('selected'); });
+        hEl.classList.add('selected');
+        myVoteLocal = i;
+        el('btnSubmitVote').classList.remove('hidden');
+      });
+    });
+
+    el('btnSubmitVote').addEventListener('click', function(){
+      if (myVoteLocal === null || !mySlug) return;
+      db.doc('players/' + mySlug).update({ vote: myVoteLocal, roundId: session.roundId });
+    });
+  });
+
+  // ---------- rendering / animation ----------
+  function setSpritePos(pos){
+    var s = el('sprite');
+    s.style.left = pos.left + '%';
+    s.style.top = pos.top + '%';
+  }
+  function itemPos(i){
+    var it = ITEMS[i];
+    return { left: it.left + it.w/2, top: it.top + it.h*0.75 };
+  }
+
+  function playTransit(fromPos, toPos, durationMs, onDone){
+    var sprite = el('sprite');
+    sprite.innerHTML = svgSimon('walk');
+    sprite.classList.add('show','step');
+    setSpritePos(fromPos);
+    sprite.style.transition = 'none';
+    // force reflow so the transition applies on the next frame
+    void sprite.offsetWidth;
+    sprite.style.transition = 'left ' + durationMs + 'ms linear, top ' + durationMs + 'ms linear';
+    requestAnimationFrame(function(){ setSpritePos(toPos); });
+    clearTimeout(animTimer);
+    animTimer = setTimeout(function(){
+      sprite.classList.remove('show','step');
+      if (onDone) onDone();
+    }, durationMs + 30);
+  }
+
+  var lastPhaseKey = '';
+  function render(){
+    renderPlayersBox();
+    renderHostPanel();
+    renderStatus();
+
+    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt;
+    if (phaseKey === lastPhaseKey) return;
+    lastPhaseKey = phaseKey;
+
+    var roomBg = el('roomBg');
+    var bed = el('bed');
+    var idle = el('idleCrop');
+    var banner = el('revealBanner');
+    banner.classList.add('hidden');
+    clearTimeout(animTimer);
+
+    if (session.phase === 'lobby' || !session.phase){
+      roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
+      bed.classList.remove('hide');
+      idle.classList.remove('show');
+      el('sprite').classList.remove('show','step');
+      setHotspots(false);
+      return;
+    }
+
+    if (session.phase === 'active'){
+      roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
+      var elapsed = session.startedAt ? (Date.now() - new Date(session.startedAt).getTime()) : WAKE_MS;
+      idle.classList.remove('show');
+      if (elapsed < WAKE_MS){
+        bed.classList.add('hide');
+        setHotspots(false);
+        var remaining = Math.max(300, WAKE_MS - elapsed);
+        playTransit(BED_POS, CENTER_POS, remaining, function(){
+          idle.classList.add('show');
+          setHotspots(true);
+        });
+      } else {
+        bed.classList.add('hide');
+        el('sprite').classList.remove('show','step');
+        idle.classList.add('show');
+        setHotspots(true);
+      }
+      return;
+    }
+
+    if (session.phase === 'revealed'){
+      bed.classList.add('hide');
+      idle.classList.remove('show');
+      setHotspots(false);
+      var elapsed2 = session.revealAt ? (Date.now() - new Date(session.revealAt).getTime()) : 999999;
+      var WALK_MS = 2000;
+      if (session.targetIndex !== null && elapsed2 < WALK_MS){
+        roomBg.style.backgroundImage = 'url(' + BASE_IMG + ')';
+        var remaining2 = Math.max(300, WALK_MS - elapsed2);
+        playTransit(CENTER_POS, itemPos(session.targetIndex), remaining2, function(){
+          showTargetImage();
+        });
+      } else {
+        showTargetImage();
+      }
+      return;
+    }
+  }
+
+  function showTargetImage(){
+    if (session.targetIndex === null) return;
+    var it = ITEMS[session.targetIndex];
+    el('roomBg').style.backgroundImage = 'url(' + it.img + ')';
+    var banner = el('revealBanner');
+    var correctPlayers = players.filter(function(p){ return p.roundId === session.roundId && p.vote === session.targetIndex; });
+    var names = correctPlayers.map(function(p){ return p.name; });
+    banner.innerHTML = 'Simon went to the <b>' + it.name.toUpperCase() + '</b>!<br>' +
+      (names.length ? ('Correct: ' + names.join(', ')) : 'Nobody guessed it this time.');
+    banner.classList.remove('hidden');
+  }
+
+  function setHotspots(active){
+    hotspotEls.forEach(function(h){
+      h.classList.toggle('active', active && !isHost);
+      h.classList.toggle('disabled', isHost || !active);
+      if (!active) h.classList.remove('selected');
+    });
+  }
+
+  function renderStatus(){
+    var heading = el('statusHeading'), sub = el('statusSub'), submitBtn = el('btnSubmitVote');
+    if (session.phase === 'lobby' || !session.phase){
+      heading.textContent = 'Waiting for host…';
+      sub.textContent = 'Simon is asleep. Hang tight!';
+      submitBtn.classList.add('hidden');
+    } else if (session.phase === 'active'){
+      var myVoted = players.find(function(p){ return p.name && slugify(p.name) === mySlug; });
+      var alreadyVoted = myVoted && myVoted.roundId === session.roundId && myVoted.vote !== null && myVoted.vote !== undefined;
+      heading.textContent = alreadyVoted ? 'Vote submitted!' : 'Where will he go?';
+      sub.textContent = alreadyVoted ? 'Waiting for the host to reveal…' : 'Click an item, then submit your vote.';
+      submitBtn.classList.toggle('hidden', myVoteLocal === null || alreadyVoted);
+    } else if (session.phase === 'revealed'){
+      heading.textContent = 'Revealed!';
+      sub.textContent = 'Start the next round whenever you\'re ready.';
+      submitBtn.classList.add('hidden');
+    }
+  }
+
+  function renderPlayersBox(){
+    var box = el('playersBox');
+    box.innerHTML = '';
+    if (!players.length){
+      box.innerHTML = '<p class="muted">No one has joined yet.</p>';
+      return;
+    }
+    var showResult = session.phase === 'revealed';
+    players.forEach(function(p){
+      var row = document.createElement('div');
+      var votedThisRound = p.roundId === session.roundId && p.vote !== null && p.vote !== undefined;
+      var correct = votedThisRound && p.vote === session.targetIndex;
+      row.className = 'player-row' + (showResult && votedThisRound ? (correct ? ' correct' : ' wrong') : '');
+      var mark = '';
+      if (session.phase === 'active') mark = votedThisRound ? '✓' : '…';
+      if (showResult) mark = votedThisRound ? (correct ? '✓' : '✗') : '–';
+      row.innerHTML = '<span>' + escapeHtml(p.name) + (session.phase!=='lobby' ? ' <span class="muted">'+mark+'</span>' : '') + '</span><span class="score">' + (p.score||0) + '</span>';
+      box.appendChild(row);
+    });
+  }
+
+  function renderHostPanel(){
+    if (!isHost) return;
+    el('btnReveal').disabled = !(session.phase === 'active' && session.targetIndex !== null);
+    var note = '';
+    if (session.phase === 'lobby' || !session.phase) note = 'Click Start Round when the team is ready.';
+    else if (session.phase === 'active') note = session.targetIndex === null ? 'Pick tonight\'s target below, then Reveal any time.' : ('Target set: ' + ITEMS[session.targetIndex].name + '. Reveal whenever you like.');
+    else if (session.phase === 'revealed') note = 'Round complete. Start the next round for tomorrow\'s guess.';
+    el('hostPhaseNote').textContent = note;
+    Array.prototype.forEach.call(targetGrid.children, function(btn, i){
+      btn.classList.toggle('picked', session.targetIndex === i);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  render();
+})();
+</script>
