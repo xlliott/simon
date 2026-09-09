@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Sleepwalking Simon</title>
+<link rel="icon" type="image/png" href="assets/favicon.png?v=1">
 <style>
   @font-face{
     font-family:'Press Start 2P';
@@ -65,6 +66,9 @@
     background-repeat:no-repeat; background-size:contain; background-position:center bottom;
   }
   .sprite.show{ display:block; }
+  /* The sprite is drawn facing left, so mirror it when he walks right.
+     Mirroring is about the element's own centre, so his feet stay put. */
+  .sprite.face-right{ transform:translate(-50%,-94%) scaleX(-1); }
   .sprite.idle{ animation:idlebob 1.6s ease-in-out infinite; }
   @keyframes idlebob{
     0%,100%{ transform:translate(-50%,-94%); }
@@ -622,6 +626,7 @@
   function playTransit(fromPos, toPos, durationMs, onDone){
     var sprite = el('sprite');
     sprite.classList.remove('idle');
+    sprite.classList.toggle('face-right', toPos.left > fromPos.left);
     sprite.classList.add('show');
     sprite.style.transition = 'none';
     setSpritePos(fromPos);
@@ -642,12 +647,13 @@
     sprite.style.transition = 'none';
     setSpritePos(CENTER_POS);
     sprite.style.backgroundImage = 'url(' + SIMON_IDLE_IMG + ')';
+    sprite.classList.remove('face-right');
     sprite.classList.add('show','idle');
   }
 
   function hideSprite(){
     stopWalkFrames();
-    el('sprite').classList.remove('show','idle');
+    el('sprite').classList.remove('show','idle','face-right');
   }
 
   var lastPhaseKey = '';
