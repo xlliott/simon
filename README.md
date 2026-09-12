@@ -19,9 +19,15 @@ A round goes: **Start Round** (opens voting) → team clicks an object and submi
 → host picks tonight's target from the hidden grid → **Reveal** (Simon walks
 there, the scene changes to him at that object, then the fact box appears).
 
+Once a location has been revealed it is **out of play for the rest of the game**
+— the team sees it shaded and can't vote for it, and it drops out of the host's
+target picker. The host panel counts what's left. **Put Locations Back** makes all
+10 selectable again without touching names or scores, which is how you start a
+fresh cycle (or recover if you use all ten).
+
 Scores accumulate across rounds automatically. **Reset Game** wipes every player
-and score and returns everyone to the title screen; the `×` beside a name
-removes just that person.
+and score, puts every location back, and returns everyone to the title screen;
+the `×` beside a name removes just that person.
 
 ## Editing the content
 

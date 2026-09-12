@@ -118,12 +118,21 @@
      cursor leaves it. */
   .hotspot.selected:hover{ border-color:#7dffa6; background:radial-gradient(circle, rgba(61,220,106,.5) 0%, rgba(61,220,106,0) 75%); }
   .hotspot.disabled{ cursor:default; }
+  /* A location Simon has already been to in an earlier round. Still drawn, so
+     the team can see it's out of play rather than clicking a dead area and
+     wondering why nothing happened, but never .active, so none of the
+     hover/selected rules above can reach it. */
+  .hotspot.spent{
+    cursor:default; border-style:solid; border-color:rgba(255,255,255,.22);
+    background:repeating-linear-gradient(45deg, rgba(0,0,0,.5) 0 6px, rgba(0,0,0,.2) 6px 12px);
+  }
   .hotspot .tag{
     position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
     font-size:9px; background:#000c; padding:1px 5px; border-radius:4px; white-space:nowrap;
     opacity:0; transition:opacity .15s;
   }
   .hotspot.active:hover .tag, .hotspot.selected .tag{ opacity:1; }
+  .hotspot.spent .tag{ opacity:1; background:#000d; color:#98a1b6; text-decoration:line-through; }
 
   .panel{
     background:var(--panel-bg); border:3px solid var(--border); border-radius:8px;
@@ -186,6 +195,7 @@
     border-radius:5px; padding:8px 4px; font-size:.55rem;
   }
   .target-grid button.picked{ background:var(--accent2); color:#5a3d00; }
+  .target-grid button.spent{ opacity:.4; text-decoration:line-through; cursor:default; }
   .reveal-banner{
     text-align:center; font-size:.95rem; color:var(--accent2); padding:6px 0;
   }
@@ -257,6 +267,11 @@
           <p class="muted" id="hostPhaseNote"></p>
           <h2 style="margin-top:10px;">Pick tonight's target <span class="muted" style="text-transform:none;">(hidden from team)</span></h2>
           <div class="target-grid" id="targetGrid"></div>
+          <p class="muted" id="usedNote"></p>
+          <div class="row" style="margin-top:14px;">
+            <button id="btnClearUsed" class="btn">Put Locations Back</button>
+          </div>
+          <p class="muted">Makes every location selectable again, keeping names and scores.</p>
           <div class="row" style="margin-top:14px;">
             <button id="btnResetGame" class="btn">Reset Game</button>
           </div>
@@ -548,7 +563,10 @@
   }
 
   // ---------- live state ----------
-  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null };
+  // `used` holds the ITEMS indexes Simon has already visited. It survives
+  // Start Round so a location stays out of play for the rest of the game;
+  // only Put Locations Back or Reset Game empty it.
+  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[] };
   var players = [];
   var myVoteLocal = null;
   var animTimer = null;
@@ -569,7 +587,8 @@
         roundId: newRoundId,
         targetIndex: (typeof d.targetIndex === 'number') ? d.targetIndex : null,
         startedAt: d.startedAt || null,
-        revealAt: d.revealAt || null
+        revealAt: d.revealAt || null,
+        used: Array.isArray(d.used) ? d.used : []
       };
       render();
     });
@@ -591,7 +610,8 @@
       var rid = String(Date.now());
       db.doc('session/state').set({
         phase:'active', roundId: rid, targetIndex:null,
-        startedAt: nowIso(), revealAt:null
+        startedAt: nowIso(), revealAt:null,
+        used: session.used
       });
     });
 
@@ -604,12 +624,18 @@
     el('btnResetGame').addEventListener('click', function(){
       if (!confirm('Reset the game? This clears every player\'s name and score, and returns everyone to the title screen.')) return;
       db.collection('players').deleteAll().then(function(){
-        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null });
+        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[] });
       });
     });
 
+    el('btnClearUsed').addEventListener('click', function(){
+      if (!session.used.length) return;
+      if (!confirm('Make all ' + ITEMS.length + ' locations selectable again? Names and scores are kept.')) return;
+      db.doc('session/state').update({ used: [] });
+    });
+
     targetGrid.addEventListener('click', function(e){
-      var btn = e.target.closest('button'); if (!btn) return;
+      var btn = e.target.closest('button'); if (!btn || btn.classList.contains('spent')) return;
       db.doc('session/state').update({ targetIndex: Number(btn.dataset.index) });
     });
 
@@ -621,14 +647,20 @@
         .map(function(p){
           return db.doc('players/' + slugify(p.name)).update({ score: (p.score||0) + 1 });
         });
+      // Written with the phase change rather than after it, so everyone gets
+      // the new `used` list in the same snapshot that ends the round.
+      var nextUsed = session.used.indexOf(correctIdx) === -1
+        ? session.used.concat([correctIdx])
+        : session.used;
       Promise.all(updates).then(function(){
-        return db.doc('session/state').update({ phase:'revealed', revealAt: nowIso() });
+        return db.doc('session/state').update({ phase:'revealed', revealAt: nowIso(), used: nextUsed });
       });
     });
 
     hotspotEls.forEach(function(hEl, i){
       hEl.addEventListener('click', function(){
         if (isHost || session.phase !== 'active' || !mySlug) return;
+        if (session.used.indexOf(i) !== -1) return;
         hotspotEls.forEach(function(x){ x.classList.remove('selected'); });
         hEl.classList.add('selected');
         myVoteLocal = i;
@@ -707,7 +739,7 @@
     renderHostPanel();
     renderStatus();
 
-    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt;
+    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt + '|' + session.used.join(',');
     if (phaseKey === lastPhaseKey) return;
     lastPhaseKey = phaseKey;
 
@@ -773,9 +805,11 @@
   }
 
   function setHotspots(active){
-    hotspotEls.forEach(function(h){
-      h.classList.toggle('active', active && !isHost);
-      h.classList.toggle('disabled', isHost || !active);
+    hotspotEls.forEach(function(h, i){
+      var spent = session.used.indexOf(i) !== -1;
+      h.classList.toggle('spent', active && !isHost && spent);
+      h.classList.toggle('active', active && !isHost && !spent);
+      h.classList.toggle('disabled', isHost || !active || spent);
       if (!active) h.classList.remove('selected');
     });
   }
@@ -790,7 +824,8 @@
       var myVoted = players.find(function(p){ return p.name && slugify(p.name) === mySlug; });
       var alreadyVoted = myVoted && myVoted.roundId === session.roundId && myVoted.vote !== null && myVoted.vote !== undefined;
       heading.textContent = alreadyVoted ? 'Vote submitted!' : 'Where will he go?';
-      sub.textContent = alreadyVoted ? 'Waiting for the host to reveal…' : 'Click an item, then submit your vote.';
+      var spentNote = session.used.length ? ' Shaded spots have already been used.' : '';
+      sub.textContent = alreadyVoted ? 'Waiting for the host to reveal…' : ('Click an item, then submit your vote.' + spentNote);
       submitBtn.classList.toggle('hidden', myVoteLocal === null || alreadyVoted);
     } else if (session.phase === 'revealed'){
       heading.textContent = 'Revealed!';
@@ -830,9 +865,19 @@
     else if (session.phase === 'active') note = session.targetIndex === null ? 'Pick tonight\'s target below, then Reveal any time.' : ('Target set: ' + ITEMS[session.targetIndex].name + '. Reveal whenever you like.');
     else if (session.phase === 'revealed') note = 'Round complete. Start the next round for tomorrow\'s guess.';
     el('hostPhaseNote').textContent = note;
+    var remaining = ITEMS.length - session.used.length;
     Array.prototype.forEach.call(targetGrid.children, function(btn, i){
-      btn.classList.toggle('picked', session.targetIndex === i);
+      var spent = session.used.indexOf(i) !== -1;
+      btn.classList.toggle('spent', spent);
+      btn.classList.toggle('picked', !spent && session.targetIndex === i);
+      btn.disabled = spent;
     });
+    el('usedNote').textContent = !session.used.length
+      ? 'All ' + ITEMS.length + ' locations still in play.'
+      : (remaining
+          ? (session.used.length + ' used and out of play, ' + remaining + ' left.')
+          : 'Every location has been used. Put them back to keep playing.');
+    el('btnClearUsed').disabled = !session.used.length;
   }
 
   function escapeHtml(s){
