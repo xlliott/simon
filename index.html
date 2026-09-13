@@ -195,7 +195,12 @@
     border-radius:5px; padding:8px 4px; font-size:.55rem;
   }
   .target-grid button.picked{ background:var(--accent2); color:#5a3d00; }
+  /* One of the three options offered to the team this round. Green like the
+     team's own selection, so the host reads "this is what they can see";
+     .picked (gold) stays reserved for the secret target. */
+  .target-grid button.chosen{ background:var(--accent); color:#062; }
   .target-grid button.spent{ opacity:.4; text-decoration:line-through; cursor:default; }
+  .target-grid button:disabled:not(.spent){ opacity:.45; cursor:default; }
   .reveal-banner{
     text-align:center; font-size:.95rem; color:var(--accent2); padding:6px 0;
   }
@@ -265,6 +270,12 @@
             <button id="btnReveal" class="btn danger" disabled>Reveal</button>
           </div>
           <p class="muted" id="hostPhaseNote"></p>
+          <h2 style="margin-top:10px;">This round's 3 options <span class="muted" style="text-transform:none;">(the team sees these)</span></h2>
+          <div class="target-grid" id="choiceGrid"></div>
+          <p class="muted" id="choiceNote"></p>
+          <div class="row" style="margin-top:8px;">
+            <button id="btnRandomChoices" class="btn">Pick 3 For Me</button>
+          </div>
           <h2 style="margin-top:10px;">Pick tonight's target <span class="muted" style="text-transform:none;">(hidden from team)</span></h2>
           <div class="target-grid" id="targetGrid"></div>
           <p class="muted" id="usedNote"></p>
@@ -317,6 +328,10 @@
   var SIMON_IDLE_IMG = "assets/simon-idle.png?v=2";
   var SIMON_WALK_IMG = "assets/simon-walk.png?v=2";
   var CENTER_POS = {left:53.97, top:80.2};
+  // How many of the remaining locations the host puts up for a vote each
+  // round. The team picks from these three rather than from everything still
+  // in play, so the odds stay 1 in 3 all game instead of drifting to 1 in 2.
+  var CHOICE_COUNT = 3;
 
   document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + TITLE_IMG + ')';
 
@@ -508,11 +523,14 @@
   });
 
   var targetGrid = el('targetGrid');
+  var choiceGrid = el('choiceGrid');
   ITEMS.forEach(function(item, i){
-    var b = document.createElement('button');
-    b.textContent = item.name;
-    b.dataset.index = i;
-    targetGrid.appendChild(b);
+    [targetGrid, choiceGrid].forEach(function(grid){
+      var b = document.createElement('button');
+      b.textContent = item.name;
+      b.dataset.index = i;
+      grid.appendChild(b);
+    });
   });
 
   // ---------- screens ----------
@@ -566,7 +584,10 @@
   // `used` holds the ITEMS indexes Simon has already visited. It survives
   // Start Round so a location stays out of play for the rest of the game;
   // only Put Locations Back or Reset Game empty it.
-  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[] };
+  // `choices` holds the (up to CHOICE_COUNT) indexes the host has offered for
+  // the current round — the only things the team can vote for. Unlike `used`
+  // it is per-round, so Start Round wipes it.
+  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[], choices:[] };
   var players = [];
   var myVoteLocal = null;
   var animTimer = null;
@@ -588,8 +609,16 @@
         targetIndex: (typeof d.targetIndex === 'number') ? d.targetIndex : null,
         startedAt: d.startedAt || null,
         revealAt: d.revealAt || null,
-        used: Array.isArray(d.used) ? d.used : []
+        used: Array.isArray(d.used) ? d.used : [],
+        choices: Array.isArray(d.choices) ? d.choices : []
       };
+      // The host can swap an option out mid-round; a pending selection on one
+      // that just left the board would otherwise submit as a dead vote.
+      if (myVoteLocal !== null && session.choices.indexOf(myVoteLocal) === -1){
+        myVoteLocal = null;
+        hotspotEls.forEach(function(h){ h.classList.remove('selected'); });
+        el('btnSubmitVote').classList.add('hidden');
+      }
       render();
     });
 
@@ -611,7 +640,7 @@
       db.doc('session/state').set({
         phase:'active', roundId: rid, targetIndex:null,
         startedAt: nowIso(), revealAt:null,
-        used: session.used
+        used: session.used, choices: []
       });
     });
 
@@ -624,7 +653,7 @@
     el('btnResetGame').addEventListener('click', function(){
       if (!confirm('Reset the game? This clears every player\'s name and score, and returns everyone to the title screen.')) return;
       db.collection('players').deleteAll().then(function(){
-        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[] });
+        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[], choices:[] });
       });
     });
 
@@ -634,13 +663,38 @@
       db.doc('session/state').update({ used: [] });
     });
 
+    choiceGrid.addEventListener('click', function(e){
+      var btn = e.target.closest('button'); if (!btn || btn.disabled) return;
+      var idx = Number(btn.dataset.index);
+      var next = session.choices.slice();
+      var at = next.indexOf(idx);
+      if (at !== -1) next.splice(at, 1);
+      else if (next.length >= CHOICE_COUNT) return;
+      else next.push(idx);
+      writeChoices(db, next);
+    });
+
+    el('btnRandomChoices').addEventListener('click', function(){
+      var pool = ITEMS.map(function(_, i){ return i; }).filter(function(i){
+        return session.used.indexOf(i) === -1;
+      });
+      for (var i = pool.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+      }
+      writeChoices(db, pool.slice(0, CHOICE_COUNT));
+    });
+
     targetGrid.addEventListener('click', function(e){
-      var btn = e.target.closest('button'); if (!btn || btn.classList.contains('spent')) return;
-      db.doc('session/state').update({ targetIndex: Number(btn.dataset.index) });
+      var btn = e.target.closest('button'); if (!btn || btn.disabled) return;
+      var idx = Number(btn.dataset.index);
+      if (session.choices.indexOf(idx) === -1) return;
+      db.doc('session/state').update({ targetIndex: idx });
     });
 
     el('btnReveal').addEventListener('click', function(){
       if (session.targetIndex === null) return;
+      if (session.choices.indexOf(session.targetIndex) === -1) return;
       var correctIdx = session.targetIndex;
       var updates = players
         .filter(function(p){ return p.roundId === session.roundId && p.vote === correctIdx; })
@@ -660,7 +714,7 @@
     hotspotEls.forEach(function(hEl, i){
       hEl.addEventListener('click', function(){
         if (isHost || session.phase !== 'active' || !mySlug) return;
-        if (session.used.indexOf(i) !== -1) return;
+        if (session.choices.indexOf(i) === -1) return;
         hotspotEls.forEach(function(x){ x.classList.remove('selected'); });
         hEl.classList.add('selected');
         myVoteLocal = i;
@@ -673,6 +727,14 @@
       db.doc('players/' + mySlug).update({ vote: myVoteLocal, roundId: session.roundId });
     });
   });
+
+  // Writing the target alongside the options: a target that is no longer one
+  // of the three would leave the team unable to vote for the right answer.
+  function writeChoices(db, next){
+    var update = { choices: next };
+    if (session.targetIndex !== null && next.indexOf(session.targetIndex) === -1) update.targetIndex = null;
+    db.doc('session/state').update(update);
+  }
 
   // ---------- rendering / animation ----------
   function setSpritePos(pos){
@@ -739,7 +801,7 @@
     renderHostPanel();
     renderStatus();
 
-    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt + '|' + session.used.join(',');
+    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt + '|' + session.used.join(',') + '|' + session.choices.join(',');
     if (phaseKey === lastPhaseKey) return;
     lastPhaseKey = phaseKey;
 
@@ -807,9 +869,13 @@
   function setHotspots(active){
     hotspotEls.forEach(function(h, i){
       var spent = session.used.indexOf(i) !== -1;
+      var offered = session.choices.indexOf(i) !== -1;
+      // Locations that are neither used nor offered this round stay
+      // completely unmarked — the team should see exactly three live spots,
+      // not a board of shaded ones to reason about.
       h.classList.toggle('spent', active && !isHost && spent);
-      h.classList.toggle('active', active && !isHost && !spent);
-      h.classList.toggle('disabled', isHost || !active || spent);
+      h.classList.toggle('active', active && !isHost && offered);
+      h.classList.toggle('disabled', isHost || !active || !offered);
       if (!active) h.classList.remove('selected');
     });
   }
@@ -823,9 +889,17 @@
     } else if (session.phase === 'active'){
       var myVoted = players.find(function(p){ return p.name && slugify(p.name) === mySlug; });
       var alreadyVoted = myVoted && myVoted.roundId === session.roundId && myVoted.vote !== null && myVoted.vote !== undefined;
+      if (!session.choices.length){
+        heading.textContent = 'Get ready…';
+        sub.textContent = 'The host is choosing tonight\'s ' + CHOICE_COUNT + ' options.';
+        submitBtn.classList.add('hidden');
+        return;
+      }
       heading.textContent = alreadyVoted ? 'Vote submitted!' : 'Where will he go?';
-      var spentNote = session.used.length ? ' Shaded spots have already been used.' : '';
-      sub.textContent = alreadyVoted ? 'Waiting for the host to reveal…' : ('Click an item, then submit your vote.' + spentNote);
+      var names = session.choices.map(function(i){ return ITEMS[i].name; }).join(', ');
+      sub.textContent = alreadyVoted
+        ? 'Waiting for the host to reveal…'
+        : ('Tonight it\'s one of ' + names + '. Click one, then submit your vote.');
       submitBtn.classList.toggle('hidden', myVoteLocal === null || alreadyVoted);
     } else if (session.phase === 'revealed'){
       heading.textContent = 'Revealed!';
@@ -859,18 +933,42 @@
 
   function renderHostPanel(){
     if (!isHost) return;
-    el('btnReveal').disabled = !(session.phase === 'active' && session.targetIndex !== null);
+    var picking = session.phase === 'active';
+    var optionsReady = session.choices.length === CHOICE_COUNT;
+    el('btnReveal').disabled = !(picking && session.targetIndex !== null && session.choices.indexOf(session.targetIndex) !== -1);
     var note = '';
     if (session.phase === 'lobby' || !session.phase) note = 'Click Start Round when the team is ready.';
-    else if (session.phase === 'active') note = session.targetIndex === null ? 'Pick tonight\'s target below, then Reveal any time.' : ('Target set: ' + ITEMS[session.targetIndex].name + '. Reveal whenever you like.');
+    else if (picking && !optionsReady) note = 'Choose the ' + CHOICE_COUNT + ' locations the team votes between.';
+    else if (picking) note = session.targetIndex === null ? 'Pick tonight\'s target from those three, then Reveal any time.' : ('Target set: ' + ITEMS[session.targetIndex].name + '. Reveal whenever you like.');
     else if (session.phase === 'revealed') note = 'Round complete. Start the next round for tomorrow\'s guess.';
     el('hostPhaseNote').textContent = note;
     var remaining = ITEMS.length - session.used.length;
-    Array.prototype.forEach.call(targetGrid.children, function(btn, i){
+
+    // The team's three options: everything still in play is selectable until
+    // three are on the board, after which only deselecting is left.
+    Array.prototype.forEach.call(choiceGrid.children, function(btn, i){
       var spent = session.used.indexOf(i) !== -1;
+      var chosen = session.choices.indexOf(i) !== -1;
       btn.classList.toggle('spent', spent);
-      btn.classList.toggle('picked', !spent && session.targetIndex === i);
-      btn.disabled = spent;
+      btn.classList.toggle('chosen', !spent && chosen);
+      btn.disabled = spent || !picking || (optionsReady && !chosen);
+    });
+    el('btnRandomChoices').disabled = !picking || remaining < CHOICE_COUNT;
+    el('choiceNote').textContent = !picking
+      ? 'Start a round to put ' + CHOICE_COUNT + ' locations up for a vote.'
+      : (remaining < CHOICE_COUNT
+          ? 'Only ' + remaining + ' left in play — put locations back to offer ' + CHOICE_COUNT + '.'
+          : (optionsReady
+              ? 'The team is voting between these ' + CHOICE_COUNT + '. Click one to swap it out.'
+              : 'Chosen ' + session.choices.length + ' of ' + CHOICE_COUNT + '. The team can\'t vote until all ' + CHOICE_COUNT + ' are set.'));
+
+    // Tonight's answer, narrowed to the three the team can actually pick.
+    Array.prototype.forEach.call(targetGrid.children, function(btn, i){
+      var offered = session.choices.indexOf(i) !== -1;
+      btn.classList.toggle('hidden', !offered);
+      btn.classList.remove('spent');
+      btn.classList.toggle('picked', offered && session.targetIndex === i);
+      btn.disabled = !offered || !picking;
     });
     el('usedNote').textContent = !session.used.length
       ? 'All ' + ITEMS.length + ' locations still in play.'

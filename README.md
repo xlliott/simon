@@ -1,8 +1,9 @@
 # Sleepwalking Simon
 
-A daily guessing game for a sprint team. Simon sleepwalks around his room; the
-team votes on which of 10 objects he'll interact with, the host reveals the
-answer, and a sleepwalking fact appears for whichever object he reached.
+A daily guessing game for a sprint team. Simon sleepwalks around his room; each
+round the host puts three of the 10 objects up for a vote, the team picks one,
+the host reveals the answer, and a sleepwalking fact appears for whichever
+object he reached.
 
 Live at **https://sleepwalking-simon.pages.dev**
 
@@ -15,13 +16,22 @@ Live at **https://sleepwalking-simon.pages.dev**
   host panel: who's joined, a target picker only the host can see, Reveal, and
   Reset Game.
 
-A round goes: **Start Round** (opens voting) → team clicks an object and submits
-→ host picks tonight's target from the hidden grid → **Reveal** (Simon walks
-there, the scene changes to him at that object, then the fact box appears).
+A round goes: **Start Round** → host picks **the 3 options** the team votes
+between (**Pick 3 For Me** chooses at random) → team clicks one of those three
+and submits → host picks tonight's target from those same three → **Reveal**
+(Simon walks there, the scene changes to him at that object, then the fact box
+appears).
+
+The three options are what the team sees light up on the room; everything else
+is inert for that round, so the odds are always 1 in 3 rather than 1 in however
+many locations are left. They're per-round: Start Round clears them and the host
+picks a fresh three. Nobody can vote until all three are set, and swapping an
+option out after picking the target clears the target too — the answer always
+has to be something the team can actually choose.
 
 Once a location has been revealed it is **out of play for the rest of the game**
-— the team sees it shaded and can't vote for it, and it drops out of the host's
-target picker. The host panel counts what's left. **Put Locations Back** makes all
+— the team sees it shaded, and it drops out of the options the host can offer in
+later rounds. The host panel counts what's left. **Put Locations Back** makes all
 10 selectable again without touching names or scores, which is how you start a
 fresh cycle (or recover if you use all ten).
 
