@@ -421,8 +421,9 @@
   var FINALE_FADE_MS   = 1200;  // stepping through, portal scene fading out
   var FINALE_EMPTY_MS  = 2400;  // empty room, the suspense beat
   var FINALE_TOTAL_MS  = FINALE_WALK_MS + FINALE_PORTAL_MS + FINALE_FADE_MS + FINALE_EMPTY_MS;
-  // Long enough after he lands to read the fact before the scores take over.
-  var FINALE_PODIUM_MS = 4500;
+  // A beat to take in where he came out and who called it, before the scores
+  // take over. Shorter than it would need to be if a fact were showing.
+  var FINALE_PODIUM_MS = 3000;
   // Podium marks. The winner gets the filled star the other two don't, plus a
   // WINNER tag beside the name; swap these for anything you like.
   var PODIUM_MARKS = ['\u2605', '\u2606', '\u2606'];
@@ -1030,10 +1031,6 @@
   function showPodium(){
     if (!players.length) return;
     renderPodium();
-    // The fact has had its beat; leaving it up behind the scrim only crowds
-    // the scores.
-    clearTimeout(factTimer);
-    el('factBox').classList.remove('show');
     el('podium').classList.add('show');
   }
 
@@ -1132,6 +1129,11 @@
       : (session.finale ? 'Nobody saw that coming.' : 'Nobody guessed it this time.');
     banner.innerHTML = headline + '<br>' + outcome;
     banner.classList.remove('hidden');
+
+    // No fact on the finale. He can only reappear somewhere already used, and
+    // a location's fact was shown on the night it came up, so it would be a
+    // repeat — and it would sit on screen right where the scores are about to.
+    if (session.finale) return;
 
     // Let the arrival scene land on its own for a beat before the fact box
     // slides up over it.

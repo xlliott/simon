@@ -52,13 +52,15 @@ that one was already used, which is how it came to be an option.
 
 The reveal runs as five beats — he walks to the wardrobe, stands at the open
 portal, fades through it, the room holds empty, then he turns up somewhere he
-has already been and that location's fact appears. Every browser rebuilds the
+has already been. No fact box: he can only reappear somewhere already used, so
+its fact was shown on the night it came up and would only be a repeat. Every
+browser rebuilds the
 sequence from the moment the host hit Reveal, so anyone whose poll lands
 part-way through drops into the right beat instead of replaying it or skipping
 to the end.
 
-About four and a half seconds after he lands, once the fact has had its beat,
-a **Final Scores** podium fades up over the scene: 1st, 2nd and 3rd, the winner
+About three seconds after he lands — a beat to take in where he came out and
+who called it — a **Final Scores** podium fades up over the scene: 1st, 2nd and 3rd, the winner
 starred and tagged in gold. It covers the stage only, so the host panel stays
 reachable behind it, and `×` closes it. Players level on points share a place
 and are named on the same row (`JOINT WINNERS` if that place is first), so a
