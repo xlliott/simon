@@ -38,43 +38,52 @@ fresh cycle (or recover if you use all ten).
 ## The finale round
 
 **Start Finale Round** is the last night of the game, for when the wardrobe is
-the only location left in play. A normal round there would be a free point, so
-the finale inverts the question: Simon walks into the wardrobe, steps through
-the portal behind it and vanishes, and the team bets on **which of the
-locations he has already used he reappears at** — worth **5 points** instead of
-the usual 1.
+the only location left in play. It runs in **two parts, with two votes**, and
+the point of the structure is that the team is told nothing about it until it
+happens.
 
-The host picks the three options out of the *spent* pile rather than what's
-left in play (the wardrobe itself is never an option — it's where he's going),
-so it needs at least three used locations; the button says so and refuses if
-there aren't. Revealing spends the wardrobe, not the location he lands at:
-that one was already used, which is how it came to be an option.
+**Part one looks like an ordinary round.** The wardrobe is the only thing on the
+board, and the team's panel says what it always says — *"Where will he go?"* —
+with no mention of a finale, a portal or bonus points. The wardrobe is put up as
+the option *and* set as the answer the moment the finale starts, so the host
+doesn't pick a target here; the team just has to click the one location left.
+Revealing walks him over, and he steps through the portal behind it and
+vanishes. That is the surprise, and nothing on screen gives it away beforehand:
+the status line reads only *"There he goes…"* until he is actually gone. It pays
+the ordinary 1 point, which everyone gets, so it doesn't move the standings.
 
-The reveal runs as five beats — he walks to the wardrobe, stands at the open
-portal, fades through it, the room holds empty, then he turns up somewhere he
-has already been. No fact box: he can only reappear somewhere already used, so
-its fact was shown on the night it came up and would only be a repeat. Every
-browser rebuilds the
-sequence from the moment the host hit Reveal, so anyone whose poll lands
-part-way through drops into the right beat instead of replaying it or skipping
-to the end.
+**Part two is the bet.** With him inside and the room left empty, the host
+clicks **Open Second Vote** — a fresh round, so everyone's part-one vote is
+cleared and the usual vote-and-reveal path runs again. The host picks three
+places he might come back out at, drawn from the *spent* pile (the wardrobe he
+went into is excluded), and secretly picks which one is right. The team votes
+on a room that still shows the open portal and no Simon. Revealing holds that
+empty room for a beat and then he is simply there, wherever the host chose,
+worth **5 points**.
 
-About three seconds after he lands — a beat to take in where he came out and
-who called it — a **Final Scores** podium fades up over the scene: 1st, 2nd and 3rd, the winner
-starred and tagged in gold. It covers the stage only, so the host panel stays
-reachable behind it, and `×` closes it. Players level on points share a place
-and are named on the same row (`JOINT WINNERS` if that place is first), so a
-tie can't quietly drop anyone off the board; the three places are the top three
-*distinct scores*, which is why a team of two shows two rows rather than an
-empty third. The marks and labels are `PODIUM_MARKS` / `PODIUM_PLACES` near the
-other finale constants.
+Starting the finale needs the wardrobe still in play and at least three used
+locations for part two; the button checks both and says which is missing. Part
+one spends the wardrobe. Part two spends nothing — he comes back out somewhere
+already used, which is how it came to be an option.
 
-Nothing in the side panel gives the answer away while that plays. The round is
-already `revealed` from the moment the host clicks, a good five seconds before
-he reappears, so the sign-off and the correct/wrong ticks are held back until
-he actually lands — until then the team sees only who has voted, exactly as
-during the vote itself. A browser that joins after the sequence has finished
-skips the suspense rather than sitting in it.
+No fact box on either part. He can only reappear somewhere already used, so its
+fact was shown on the night it came up and would only be a repeat.
+
+Every browser rebuilds each sequence from the moment the host hit Reveal, so
+anyone whose poll lands part-way through drops into the right beat instead of
+replaying it or skipping to the end. Nothing in the side panel gives a result
+away while one plays: the correct/wrong ticks are held back until the beat
+lands, and until then the team sees only who has voted, exactly as during the
+vote itself.
+
+About three seconds after he comes back out, a **Final Scores** podium fades up
+over the scene: 1st, 2nd and 3rd, the winner starred and tagged in gold. It
+covers the stage only, so the host panel stays reachable behind it, and `×`
+closes it. Players level on points share a place and are named on the same row
+(`JOINT WINNERS` if that place is first), so a tie can't quietly drop someone
+off the board; the three places are the top three *distinct scores*, which is
+why a team of two shows two rows rather than an empty third. The marks and
+labels are `PODIUM_MARKS` / `PODIUM_PLACES` near the other finale constants.
 
 Scores accumulate across rounds automatically. **Reset Game** wipes every player
 and score, puts every location back, and returns everyone to the title screen;
