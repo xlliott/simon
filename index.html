@@ -59,6 +59,11 @@
     transition:opacity .5s ease;
   }
   .room-bg.fade{ opacity:0; }
+  /* Second room layer, used only by the finale. The portal scene sits over the
+     already-vanished room and fades out, which is what reads as Simon stepping
+     through — no sprite work, and the two frames share the 1376x768 framing so
+     nothing shifts underneath. Below the sprite (4) and hotspots (5). */
+  .room-bg.top{ z-index:1; opacity:0; }
   .sprite{
     position:absolute; height:32%; aspect-ratio:1/1;
     z-index:4; display:none; transform:translate(-50%,-94%);
@@ -242,6 +247,7 @@
       <div class="stage-col">
         <div class="stage-wrap" id="stage">
           <div class="room-bg" id="roomBg"></div>
+          <div class="room-bg top" id="roomBgTop"></div>
           <div class="sprite" id="sprite"></div>
           <div class="fact-box" id="factBox">
             <h3 id="factTitle"></h3>
@@ -269,6 +275,11 @@
             <button id="btnStartRound" class="btn primary">Start Round</button>
             <button id="btnReveal" class="btn danger" disabled>Reveal</button>
           </div>
+          <div class="row" style="margin-top:8px;">
+            <button id="btnStartFinale" class="btn gold">Start Finale Round</button>
+          </div>
+          <p class="muted">The last night: Simon walks into the wardrobe and vanishes. The team bets on which
+            already-used location he reappears at, for 5 points.</p>
           <p class="muted" id="hostPhaseNote"></p>
           <h2 style="margin-top:10px;">This round's 3 options <span class="muted" style="text-transform:none;">(the team sees these)</span></h2>
           <div class="target-grid" id="choiceGrid"></div>
@@ -332,6 +343,24 @@
   // round. The team picks from these three rather than from everything still
   // in play, so the odds stay 1 in 3 all game instead of drifting to 1 in 2.
   var CHOICE_COUNT = 3;
+  // ---- Finale round ----
+  // The last night of the game: rather than guessing where Simon goes (only
+  // the wardrobe is left, so that would be a free point), the team bets on
+  // which of the locations he has already used he reappears at after stepping
+  // through the portal. Worth more because it is the last guess of the game.
+  var WARDROBE_INDEX = 6;
+  var ROUND_POINTS = 1;
+  var FINALE_POINTS = 5;
+  var PORTAL_IMG = "assets/sleepwalking-simon-portal.webp";
+  var VANISHED_IMG = "assets/sleepwalking-simon-vanished.webp";
+  // Stage lengths of the finale reveal, in order. Everyone's client rebuilds
+  // the sequence from `revealAt`, so a browser whose 1.5s poll lands mid-way
+  // drops into the right stage with the right time left rather than replaying
+  // it from the top or skipping to the end.
+  var FINALE_WALK_MS   = 2000;  // centre -> wardrobe
+  var FINALE_PORTAL_MS = 1600;  // stood at the open portal
+  var FINALE_FADE_MS   = 1200;  // stepping through, portal scene fading out
+  var FINALE_EMPTY_MS  = 2400;  // empty room, the suspense beat
 
   document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + TITLE_IMG + ')';
 
@@ -587,7 +616,7 @@
   // `choices` holds the (up to CHOICE_COUNT) indexes the host has offered for
   // the current round — the only things the team can vote for. Unlike `used`
   // it is per-round, so Start Round wipes it.
-  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[], choices:[] };
+  var session = { phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[], choices:[], finale:false };
   var players = [];
   var myVoteLocal = null;
   var animTimer = null;
@@ -610,7 +639,8 @@
         startedAt: d.startedAt || null,
         revealAt: d.revealAt || null,
         used: Array.isArray(d.used) ? d.used : [],
-        choices: Array.isArray(d.choices) ? d.choices : []
+        choices: Array.isArray(d.choices) ? d.choices : [],
+        finale: !!d.finale
       };
       // The host can swap an option out mid-round; a pending selection on one
       // that just left the board would otherwise submit as a dead vote.
@@ -640,7 +670,23 @@
       db.doc('session/state').set({
         phase:'active', roundId: rid, targetIndex:null,
         startedAt: nowIso(), revealAt:null,
-        used: session.used, choices: []
+        used: session.used, choices: [], finale:false
+      });
+    });
+
+    el('btnStartFinale').addEventListener('click', function(){
+      // The three options come out of the used pile, so there have to be three
+      // there; the wardrobe itself is the departure point, never an option.
+      var reachable = session.used.filter(function(i){ return i !== WARDROBE_INDEX; }).length;
+      if (reachable < CHOICE_COUNT){
+        alert('The finale needs ' + CHOICE_COUNT + ' already-used locations for Simon to reappear at, and there are only ' + reachable + '. Play a few normal rounds first.');
+        return;
+      }
+      if (!confirm('Start the finale round? Simon walks into the wardrobe and vanishes, and the team bets ' + FINALE_POINTS + ' points on where he reappears.')) return;
+      db.doc('session/state').set({
+        phase:'active', roundId: String(Date.now()), targetIndex:null,
+        startedAt: nowIso(), revealAt:null,
+        used: session.used, choices: [], finale:true
       });
     });
 
@@ -653,7 +699,7 @@
     el('btnResetGame').addEventListener('click', function(){
       if (!confirm('Reset the game? This clears every player\'s name and score, and returns everyone to the title screen.')) return;
       db.collection('players').deleteAll().then(function(){
-        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[], choices:[] });
+        return db.doc('session/state').set({ phase:'lobby', roundId:null, targetIndex:null, startedAt:null, revealAt:null, used:[], choices:[], finale:false });
       });
     });
 
@@ -675,9 +721,7 @@
     });
 
     el('btnRandomChoices').addEventListener('click', function(){
-      var pool = ITEMS.map(function(_, i){ return i; }).filter(function(i){
-        return session.used.indexOf(i) === -1;
-      });
+      var pool = optionPool();
       for (var i = pool.length - 1; i > 0; i--){
         var j = Math.floor(Math.random() * (i + 1));
         var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
@@ -696,15 +740,19 @@
       if (session.targetIndex === null) return;
       if (session.choices.indexOf(session.targetIndex) === -1) return;
       var correctIdx = session.targetIndex;
+      var award = session.finale ? FINALE_POINTS : ROUND_POINTS;
       var updates = players
         .filter(function(p){ return p.roundId === session.roundId && p.vote === correctIdx; })
         .map(function(p){
-          return db.doc('players/' + slugify(p.name)).update({ score: (p.score||0) + 1 });
+          return db.doc('players/' + slugify(p.name)).update({ score: (p.score||0) + award });
         });
       // Written with the phase change rather than after it, so everyone gets
       // the new `used` list in the same snapshot that ends the round.
-      var nextUsed = session.used.indexOf(correctIdx) === -1
-        ? session.used.concat([correctIdx])
+      // The finale spends the wardrobe, not the location he reappears at —
+      // that one was already used, which is how it came to be an option.
+      var spend = session.finale ? WARDROBE_INDEX : correctIdx;
+      var nextUsed = session.used.indexOf(spend) === -1
+        ? session.used.concat([spend])
         : session.used;
       Promise.all(updates).then(function(){
         return db.doc('session/state').update({ phase:'revealed', revealAt: nowIso(), used: nextUsed });
@@ -727,6 +775,16 @@
       db.doc('players/' + mySlug).update({ vote: myVoteLocal, roundId: session.roundId });
     });
   });
+
+  // Which locations the host may put up for a vote. A normal round offers what
+  // is still in play; the finale inverts that, offering the spent ones, since
+  // reappearing somewhere he has already been is the whole joke.
+  function optionPool(){
+    return ITEMS.map(function(_, i){ return i; }).filter(function(i){
+      var spent = session.used.indexOf(i) !== -1;
+      return session.finale ? (spent && i !== WARDROBE_INDEX) : !spent;
+    });
+  }
 
   // Writing the target alongside the options: a target that is no longer one
   // of the three would leave the team unable to vote for the right answer.
@@ -801,7 +859,7 @@
     renderHostPanel();
     renderStatus();
 
-    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt + '|' + session.used.join(',') + '|' + session.choices.join(',');
+    var phaseKey = session.phase + '|' + session.roundId + '|' + session.targetIndex + '|' + session.startedAt + '|' + session.revealAt + '|' + session.used.join(',') + '|' + session.choices.join(',') + '|' + session.finale;
     if (phaseKey === lastPhaseKey) return;
     lastPhaseKey = phaseKey;
 
@@ -811,6 +869,7 @@
     clearTimeout(animTimer);
     clearTimeout(factTimer);
     el('factBox').classList.remove('show');
+    clearPortalLayer();
 
     if (session.phase === 'lobby' || !session.phase){
       roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
@@ -830,6 +889,7 @@
       setHotspots(false);
       roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
       var elapsed2 = session.revealAt ? (Date.now() - new Date(session.revealAt).getTime()) : 999999;
+      if (session.finale){ playFinale(elapsed2); return; }
       var WALK_MS = 2000;
       if (session.targetIndex !== null && elapsed2 < WALK_MS){
         var remaining2 = Math.max(300, WALK_MS - elapsed2);
@@ -845,6 +905,70 @@
     }
   }
 
+  function clearPortalLayer(){
+    var top = el('roomBgTop');
+    top.style.transition = 'none';
+    top.style.opacity = '0';
+  }
+
+  // The finale reveal, rebuilt from how long ago the host hit Reveal so that
+  // every browser is showing the same beat. Stages, in order: Simon walks to
+  // the wardrobe, stands at the open portal, fades through it, the room holds
+  // empty, and then he turns up somewhere he has already been.
+  function playFinale(elapsed){
+    var roomBg = el('roomBg'), top = el('roomBgTop');
+    var T1 = FINALE_WALK_MS;
+    var T2 = T1 + FINALE_PORTAL_MS;
+    var T3 = T2 + FINALE_FADE_MS;
+    var T4 = T3 + FINALE_EMPTY_MS;
+
+    // The room underneath is always the one he has already left; the portal
+    // scene on top is what is removed to make him disappear.
+    function setPortal(opacity){
+      roomBg.style.backgroundImage = 'url(' + VANISHED_IMG + ')';
+      top.style.transition = 'none';
+      top.style.backgroundImage = 'url(' + PORTAL_IMG + ')';
+      top.style.opacity = String(opacity);
+      void top.offsetWidth; // commit before any transition is attached
+    }
+    function stepThrough(ms){
+      top.style.transition = 'opacity ' + ms + 'ms ease-in';
+      requestAnimationFrame(function(){ top.style.opacity = '0'; });
+    }
+    function after(ms, fn){ clearTimeout(animTimer); animTimer = setTimeout(fn, ms); }
+    function fromPortal(holdMs){
+      after(holdMs, function(){
+        stepThrough(FINALE_FADE_MS);
+        after(FINALE_FADE_MS + FINALE_EMPTY_MS, showTargetImage);
+      });
+    }
+
+    if (elapsed < T1){
+      roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
+      clearPortalLayer();
+      playTransit(CENTER_POS, itemPos(WARDROBE_INDEX), Math.max(300, T1 - elapsed), function(){
+        hideSprite();
+        setPortal(1);
+        fromPortal(FINALE_PORTAL_MS);
+      });
+      return;
+    }
+    hideSprite();
+    if (elapsed < T2){ setPortal(1); fromPortal(T2 - elapsed); return; }
+    if (elapsed < T3){
+      // Mid-fade: start from however much of the portal scene is still up.
+      setPortal(1 - (elapsed - T2) / FINALE_FADE_MS);
+      var rest = T3 - elapsed;
+      stepThrough(rest);
+      after(rest + FINALE_EMPTY_MS, showTargetImage);
+      return;
+    }
+    roomBg.style.backgroundImage = 'url(' + VANISHED_IMG + ')';
+    clearPortalLayer();
+    if (elapsed < T4){ after(T4 - elapsed, showTargetImage); return; }
+    showTargetImage();
+  }
+
   function showTargetImage(){
     if (session.targetIndex === null) return;
     var it = ITEMS[session.targetIndex];
@@ -852,8 +976,13 @@
     var banner = el('revealBanner');
     var correctPlayers = players.filter(function(p){ return p.roundId === session.roundId && p.vote === session.targetIndex; });
     var names = correctPlayers.map(function(p){ return p.name; });
-    banner.innerHTML = 'Simon went to the <b>' + it.name.toUpperCase() + '</b>!<br>' +
-      (names.length ? ('Correct: ' + names.join(', ')) : 'Nobody guessed it this time.');
+    var headline = session.finale
+      ? ('Simon stepped into the <b>WARDROBE</b> \u2014 and came out at the <b>' + it.name.toUpperCase() + '</b>!')
+      : ('Simon went to the <b>' + it.name.toUpperCase() + '</b>!');
+    var outcome = names.length
+      ? ('Correct: ' + names.join(', ') + (session.finale ? (' (+' + FINALE_POINTS + ')') : ''))
+      : (session.finale ? 'Nobody saw that coming.' : 'Nobody guessed it this time.');
+    banner.innerHTML = headline + '<br>' + outcome;
     banner.classList.remove('hidden');
 
     // Let the arrival scene land on its own for a beat before the fact box
@@ -873,7 +1002,9 @@
       // Locations that are neither used nor offered this round stay
       // completely unmarked — the team should see exactly three live spots,
       // not a board of shaded ones to reason about.
-      h.classList.toggle('spent', active && !isHost && spent);
+      // In the finale the three options are themselves spent locations, so
+      // being offered wins over the shading or they would read as dead.
+      h.classList.toggle('spent', active && !isHost && spent && !offered);
       h.classList.toggle('active', active && !isHost && offered);
       h.classList.toggle('disabled', isHost || !active || !offered);
       if (!active) h.classList.remove('selected');
@@ -890,20 +1021,28 @@
       var myVoted = players.find(function(p){ return p.name && slugify(p.name) === mySlug; });
       var alreadyVoted = myVoted && myVoted.roundId === session.roundId && myVoted.vote !== null && myVoted.vote !== undefined;
       if (!session.choices.length){
-        heading.textContent = 'Get ready…';
-        sub.textContent = 'The host is choosing tonight\'s ' + CHOICE_COUNT + ' options.';
+        heading.textContent = session.finale ? 'The last night…' : 'Get ready…';
+        sub.textContent = session.finale
+          ? 'Only the wardrobe is left, and something is behind it. The host is choosing the ' + CHOICE_COUNT + ' options.'
+          : ('The host is choosing tonight\'s ' + CHOICE_COUNT + ' options.');
         submitBtn.classList.add('hidden');
         return;
       }
-      heading.textContent = alreadyVoted ? 'Vote submitted!' : 'Where will he go?';
+      heading.textContent = alreadyVoted
+        ? 'Vote submitted!'
+        : (session.finale ? 'Where will he come out?' : 'Where will he go?');
       var names = session.choices.map(function(i){ return ITEMS[i].name; }).join(', ');
       sub.textContent = alreadyVoted
         ? 'Waiting for the host to reveal…'
-        : ('Tonight it\'s one of ' + names + '. Click one, then submit your vote.');
+        : (session.finale
+            ? ('Simon walks into the wardrobe tonight. Where does he reappear \u2014 ' + names + '? Worth ' + FINALE_POINTS + ' points.')
+            : ('Tonight it\'s one of ' + names + '. Click one, then submit your vote.'));
       submitBtn.classList.toggle('hidden', myVoteLocal === null || alreadyVoted);
     } else if (session.phase === 'revealed'){
-      heading.textContent = 'Revealed!';
-      sub.textContent = 'Start the next round whenever you\'re ready.';
+      heading.textContent = session.finale ? 'Goodnight, Simon.' : 'Revealed!';
+      sub.textContent = session.finale
+        ? 'That\'s the end of the game. Final scores are on the right.'
+        : 'Start the next round whenever you\'re ready.';
       submitBtn.classList.add('hidden');
     }
   }
@@ -938,26 +1077,36 @@
     el('btnReveal').disabled = !(picking && session.targetIndex !== null && session.choices.indexOf(session.targetIndex) !== -1);
     var note = '';
     if (session.phase === 'lobby' || !session.phase) note = 'Click Start Round when the team is ready.';
-    else if (picking && !optionsReady) note = 'Choose the ' + CHOICE_COUNT + ' locations the team votes between.';
-    else if (picking) note = session.targetIndex === null ? 'Pick tonight\'s target from those three, then Reveal any time.' : ('Target set: ' + ITEMS[session.targetIndex].name + '. Reveal whenever you like.');
-    else if (session.phase === 'revealed') note = 'Round complete. Start the next round for tomorrow\'s guess.';
+    else if (picking && !optionsReady) note = session.finale
+      ? ('FINALE. Choose the ' + CHOICE_COUNT + ' places Simon might reappear at.')
+      : ('Choose the ' + CHOICE_COUNT + ' locations the team votes between.');
+    else if (picking) note = session.targetIndex === null
+      ? (session.finale ? 'Pick where he actually comes out, then Reveal any time.' : 'Pick tonight\'s target from those three, then Reveal any time.')
+      : ((session.finale ? 'He reappears at: ' : 'Target set: ') + ITEMS[session.targetIndex].name + '. Reveal whenever you like.');
+    else if (session.phase === 'revealed') note = session.finale
+      ? 'That\'s the game. Reset Game to start a fresh one.'
+      : 'Round complete. Start the next round for tomorrow\'s guess.';
     el('hostPhaseNote').textContent = note;
     var remaining = ITEMS.length - session.used.length;
+    var pool = optionPool();
 
     // The team's three options: everything still in play is selectable until
     // three are on the board, after which only deselecting is left.
     Array.prototype.forEach.call(choiceGrid.children, function(btn, i){
-      var spent = session.used.indexOf(i) !== -1;
+      var offerable = pool.indexOf(i) !== -1;
       var chosen = session.choices.indexOf(i) !== -1;
-      btn.classList.toggle('spent', spent);
-      btn.classList.toggle('chosen', !spent && chosen);
-      btn.disabled = spent || !picking || (optionsReady && !chosen);
+      btn.classList.toggle('spent', !offerable);
+      btn.classList.toggle('chosen', offerable && chosen);
+      btn.disabled = !offerable || !picking || (optionsReady && !chosen);
     });
-    el('btnRandomChoices').disabled = !picking || remaining < CHOICE_COUNT;
+    var poolLeft = pool.length;
+    el('btnRandomChoices').disabled = !picking || poolLeft < CHOICE_COUNT;
     el('choiceNote').textContent = !picking
       ? 'Start a round to put ' + CHOICE_COUNT + ' locations up for a vote.'
-      : (remaining < CHOICE_COUNT
-          ? 'Only ' + remaining + ' left in play — put locations back to offer ' + CHOICE_COUNT + '.'
+      : (poolLeft < CHOICE_COUNT
+          ? (session.finale
+              ? 'Only ' + poolLeft + ' used locations to reappear at — the finale needs ' + CHOICE_COUNT + '.'
+              : 'Only ' + poolLeft + ' left in play — put locations back to offer ' + CHOICE_COUNT + '.')
           : (optionsReady
               ? 'The team is voting between these ' + CHOICE_COUNT + '. Click one to swap it out.'
               : 'Chosen ' + session.choices.length + ' of ' + CHOICE_COUNT + '. The team can\'t vote until all ' + CHOICE_COUNT + ' are set.'));

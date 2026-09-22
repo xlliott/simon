@@ -35,6 +35,28 @@ later rounds. The host panel counts what's left. **Put Locations Back** makes al
 10 selectable again without touching names or scores, which is how you start a
 fresh cycle (or recover if you use all ten).
 
+## The finale round
+
+**Start Finale Round** is the last night of the game, for when the wardrobe is
+the only location left in play. A normal round there would be a free point, so
+the finale inverts the question: Simon walks into the wardrobe, steps through
+the portal behind it and vanishes, and the team bets on **which of the
+locations he has already used he reappears at** — worth **5 points** instead of
+the usual 1.
+
+The host picks the three options out of the *spent* pile rather than what's
+left in play (the wardrobe itself is never an option — it's where he's going),
+so it needs at least three used locations; the button says so and refuses if
+there aren't. Revealing spends the wardrobe, not the location he lands at:
+that one was already used, which is how it came to be an option.
+
+The reveal runs as five beats — he walks to the wardrobe, stands at the open
+portal, fades through it, the room holds empty, then he turns up somewhere he
+has already been and that location's fact appears. Every browser rebuilds the
+sequence from the moment the host hit Reveal, so anyone whose poll lands
+part-way through drops into the right beat instead of replaying it or skipping
+to the end.
+
 Scores accumulate across rounds automatically. **Reset Game** wipes every player
 and score, puts every location back, and returns everyone to the title screen;
 the `×` beside a name removes just that person.
@@ -54,6 +76,11 @@ Everything lives in `index.html`.
   room he walks around in, `-title.JPG` is the title screen, and
   `simon-idle/walk.png` are the sprite frames. All room images share the same
   1376×768 framing, which is what keeps the scene from jumping between states.
+- **The finale frames** — `-portal.webp` (Simon at the open wardrobe) and
+  `-vanished.webp` (the same room with him gone) are used only by the finale.
+  He disappears by cross-fading the first away to reveal the second underneath,
+  rather than by animating the sprite, so the two have to be the same shot with
+  and without him or he'll appear to jump as he goes.
 - **Re-exporting a sprite under the same filename** — bump the `?v=` number on
   its URL in `index.html`, or browsers will keep serving the old one.
 
