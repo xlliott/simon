@@ -361,6 +361,7 @@
   var FINALE_PORTAL_MS = 1600;  // stood at the open portal
   var FINALE_FADE_MS   = 1200;  // stepping through, portal scene fading out
   var FINALE_EMPTY_MS  = 2400;  // empty room, the suspense beat
+  var FINALE_TOTAL_MS  = FINALE_WALK_MS + FINALE_PORTAL_MS + FINALE_FADE_MS + FINALE_EMPTY_MS;
 
   document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + TITLE_IMG + ')';
 
@@ -621,6 +622,10 @@
   var myVoteLocal = null;
   var animTimer = null;
   var factTimer = null;
+  // The finale's result has to stay off the side panel until he actually
+  // reappears: the phase flips to `revealed` the moment the host hits Reveal,
+  // which is a good five seconds before the answer lands on screen.
+  var finaleLanded = false;
 
   dbPromise.then(function(db){
     window.__db = db;
@@ -855,6 +860,8 @@
 
   var lastPhaseKey = '';
   function render(){
+    finaleLanded = !!(session.phase === 'revealed' && session.finale && session.revealAt
+      && (Date.now() - new Date(session.revealAt).getTime()) >= FINALE_TOTAL_MS);
     renderPlayersBox();
     renderHostPanel();
     renderStatus();
@@ -971,6 +978,11 @@
 
   function showTargetImage(){
     if (session.targetIndex === null) return;
+    if (session.finale && !finaleLanded){
+      finaleLanded = true;
+      renderPlayersBox();
+      renderStatus();
+    }
     var it = ITEMS[session.targetIndex];
     el('roomBg').style.backgroundImage = 'url(' + it.img + ')';
     var banner = el('revealBanner');
@@ -1039,6 +1051,12 @@
             : ('Tonight it\'s one of ' + names + '. Click one, then submit your vote.'));
       submitBtn.classList.toggle('hidden', myVoteLocal === null || alreadyVoted);
     } else if (session.phase === 'revealed'){
+      if (session.finale && !finaleLanded){
+        heading.textContent = 'He\'s going in…';
+        sub.textContent = 'Simon just stepped into the wardrobe. Where does he come out?';
+        submitBtn.classList.add('hidden');
+        return;
+      }
       heading.textContent = session.finale ? 'Goodnight, Simon.' : 'Revealed!';
       sub.textContent = session.finale
         ? 'That\'s the end of the game. Final scores are on the right.'
@@ -1054,14 +1072,16 @@
       box.innerHTML = '<p class="muted">No one has joined yet.</p>';
       return;
     }
-    var showResult = session.phase === 'revealed';
+    var showResult = session.phase === 'revealed' && (!session.finale || finaleLanded);
     players.forEach(function(p){
       var row = document.createElement('div');
       var votedThisRound = p.roundId === session.roundId && p.vote !== null && p.vote !== undefined;
       var correct = votedThisRound && p.vote === session.targetIndex;
       row.className = 'player-row' + (showResult && votedThisRound ? (correct ? ' correct' : ' wrong') : '');
       var mark = '';
-      if (session.phase === 'active') mark = votedThisRound ? '✓' : '…';
+      // Through the finale's held beat the mark keeps its voting-phase meaning
+      // — "has voted", not "was right" — so it doesn't blink out and back.
+      if (session.phase === 'active' || (session.finale && !finaleLanded)) mark = votedThisRound ? '✓' : '…';
       if (showResult) mark = votedThisRound ? (correct ? '✓' : '✗') : '–';
       row.innerHTML = '<span>' + escapeHtml(p.name) + (session.phase!=='lobby' ? ' <span class="muted">'+mark+'</span>' : '') + '</span>' +
         '<span class="score">' + (p.score||0) + '</span>' +

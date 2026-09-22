@@ -57,6 +57,13 @@ sequence from the moment the host hit Reveal, so anyone whose poll lands
 part-way through drops into the right beat instead of replaying it or skipping
 to the end.
 
+Nothing in the side panel gives the answer away while that plays. The round is
+already `revealed` from the moment the host clicks, a good five seconds before
+he reappears, so the sign-off and the correct/wrong ticks are held back until
+he actually lands — until then the team sees only who has voted, exactly as
+during the vote itself. A browser that joins after the sequence has finished
+skips the suspense rather than sitting in it.
+
 Scores accumulate across rounds automatically. **Reset Game** wipes every player
 and score, puts every location back, and returns everyone to the title screen;
 the `×` beside a name removes just that person.
