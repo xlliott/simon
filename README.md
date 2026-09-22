@@ -57,6 +57,16 @@ sequence from the moment the host hit Reveal, so anyone whose poll lands
 part-way through drops into the right beat instead of replaying it or skipping
 to the end.
 
+About four and a half seconds after he lands, once the fact has had its beat,
+a **Final Scores** podium fades up over the scene: 1st, 2nd and 3rd, the winner
+starred and tagged in gold. It covers the stage only, so the host panel stays
+reachable behind it, and `×` closes it. Players level on points share a place
+and are named on the same row (`JOINT WINNERS` if that place is first), so a
+tie can't quietly drop anyone off the board; the three places are the top three
+*distinct scores*, which is why a team of two shows two rows rather than an
+empty third. The marks and labels are `PODIUM_MARKS` / `PODIUM_PLACES` near the
+other finale constants.
+
 Nothing in the side panel gives the answer away while that plays. The round is
 already `revealed` from the moment the host clicks, a good five seconds before
 he reappears, so the sign-off and the correct/wrong ticks are held back until

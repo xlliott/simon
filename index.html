@@ -209,6 +209,59 @@
   .reveal-banner{
     text-align:center; font-size:.95rem; color:var(--accent2); padding:6px 0;
   }
+  /* Final podium. Sits inside the stage rather than over the whole page so the
+     host's controls stay reachable behind it. Above the fact box (12). */
+  .podium{
+    position:absolute; inset:0; z-index:20; display:none;
+    background:rgba(5,7,15,.9);
+    flex-direction:column; align-items:center; justify-content:center;
+    gap:clamp(5px,1vw,9px); padding:4% 4% 3%;
+  }
+  .podium.show{ display:flex; animation:factIn .45s ease-out both; }
+  .podium h3{
+    margin:0 0 clamp(4px,1.2vw,10px); color:var(--accent2);
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    font-size:clamp(.5rem,1.9vw,.72rem); letter-spacing:1px; text-align:center;
+  }
+  .podium-row{
+    display:flex; align-items:center; gap:clamp(6px,1.4vw,12px);
+    width:min(560px,96%); box-sizing:border-box;
+    background:#141d3d; border:3px solid #f4e9d8;
+    box-shadow:0 0 0 3px #141d3d, 0 0 0 5px #05070f;
+    padding:clamp(5px,1.1vw,10px) clamp(8px,1.6vw,14px);
+  }
+  .podium-row .place{
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    font-size:clamp(.42rem,1.4vw,.58rem); color:var(--ink-dim); min-width:3.2em;
+  }
+  .podium-row .mark{ font-size:clamp(.8rem,2.4vw,1.2rem); line-height:1; }
+  .podium-row .who{
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size:clamp(.7rem,1.9vw,.95rem); color:var(--ink);
+  }
+  .podium-row .pts{
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    font-size:clamp(.42rem,1.4vw,.58rem); color:var(--accent2);
+  }
+  /* The winner is the one row that should read from across the room. */
+  .podium-row.first{ border-color:var(--accent2); }
+  .podium-row.first .place, .podium-row.first .who{ color:var(--accent2); }
+  .podium-row.first .who{ font-size:clamp(.85rem,2.4vw,1.2rem); }
+  .podium-row.first .mark{ font-size:clamp(1rem,3vw,1.5rem); animation:crownbob 1.5s ease-in-out infinite; }
+  @keyframes crownbob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-12%); } }
+  .podium-row.second{ border-color:#cfd6e4; }
+  .podium-row.third{ border-color:#c08a4e; }
+  .podium-crown{
+    font-size:clamp(.42rem,1.4vw,.58rem); color:#5a3d00; background:var(--accent2);
+    font-family:'Press Start 2P', 'Courier New', ui-monospace, monospace;
+    padding:3px 6px; border-radius:4px; white-space:nowrap;
+  }
+  .podium-note{ color:var(--ink-dim); font-size:clamp(.55rem,1.5vw,.72rem); text-align:center; margin:2px 0 0; }
+  .podium-close{
+    position:absolute; top:6px; right:9px; background:none; border:none; cursor:pointer;
+    color:var(--ink-dim); font-family:inherit; font-size:1rem; line-height:1; padding:4px 6px;
+  }
+  .podium-close:hover{ color:var(--ink); }
   .badge{
     display:inline-block; font-size:.65rem; padding:2px 8px; border-radius:10px;
     background:var(--panel-bg-light); border:1px solid var(--border); margin-left:6px;
@@ -252,6 +305,12 @@
           <div class="fact-box" id="factBox">
             <h3 id="factTitle"></h3>
             <p id="factText"></p>
+          </div>
+          <div class="podium" id="podium">
+            <button class="podium-close" id="btnClosePodium" title="Close" aria-label="Close final scores">×</button>
+            <h3>Final Scores</h3>
+            <div id="podiumRows" style="display:flex; flex-direction:column; gap:clamp(5px,1vw,9px); width:100%; align-items:center;"></div>
+            <p class="podium-note" id="podiumNote"></p>
           </div>
           <!-- hotspots injected by JS -->
         </div>
@@ -362,6 +421,13 @@
   var FINALE_FADE_MS   = 1200;  // stepping through, portal scene fading out
   var FINALE_EMPTY_MS  = 2400;  // empty room, the suspense beat
   var FINALE_TOTAL_MS  = FINALE_WALK_MS + FINALE_PORTAL_MS + FINALE_FADE_MS + FINALE_EMPTY_MS;
+  // Long enough after he lands to read the fact before the scores take over.
+  var FINALE_PODIUM_MS = 4500;
+  // Podium marks. The winner gets the filled star the other two don't, plus a
+  // WINNER tag beside the name; swap these for anything you like.
+  var PODIUM_MARKS = ['\u2605', '\u2606', '\u2606'];
+  var PODIUM_CLASSES = ['first', 'second', 'third'];
+  var PODIUM_PLACES = ['1ST', '2ND', '3RD'];
 
   document.getElementById('titleRoomBg').style.backgroundImage = 'url(' + TITLE_IMG + ')';
 
@@ -626,6 +692,7 @@
   // reappears: the phase flips to `revealed` the moment the host hits Reveal,
   // which is a good five seconds before the answer lands on screen.
   var finaleLanded = false;
+  var podiumTimer = null;
 
   dbPromise.then(function(db){
     window.__db = db;
@@ -775,6 +842,8 @@
       });
     });
 
+    el('btnClosePodium').addEventListener('click', hidePodium);
+
     el('btnSubmitVote').addEventListener('click', function(){
       if (myVoteLocal === null || !mySlug) return;
       db.doc('players/' + mySlug).update({ vote: myVoteLocal, roundId: session.roundId });
@@ -877,6 +946,7 @@
     clearTimeout(factTimer);
     el('factBox').classList.remove('show');
     clearPortalLayer();
+    hidePodium();
 
     if (session.phase === 'lobby' || !session.phase){
       roomBg.style.backgroundImage = 'url(' + EMPTY_ROOM_IMG + ')';
@@ -912,6 +982,66 @@
     }
   }
 
+  // Top three *places*, not top three people: everyone level on points shares
+  // a place and is named on the same row, so a tie can't silently drop someone
+  // off the board. Places run 1-2-3 over distinct scores.
+  function podiumPlaces(){
+    var ranked = players.slice().sort(function(a, b){ return (b.score||0) - (a.score||0); });
+    var places = [];
+    ranked.forEach(function(p){
+      var sc = p.score || 0;
+      var last = places[places.length - 1];
+      if (last && last.score === sc) last.names.push(p.name);
+      else if (places.length < 3) places.push({ score: sc, names: [p.name] });
+    });
+    return places;
+  }
+
+  // "A", "A and B", "A, B and C" — a tie of three reads as a list, not a chain.
+  function joinNames(list, conj){
+    if (list.length < 3) return list.join(' ' + conj + ' ');
+    return list.slice(0, -1).join(', ') + ' ' + conj + ' ' + list[list.length - 1];
+  }
+
+  function renderPodium(){
+    var rows = el('podiumRows');
+    var places = podiumPlaces();
+    rows.innerHTML = '';
+    places.forEach(function(place, i){
+      var tied = place.names.length > 1;
+      var row = document.createElement('div');
+      row.className = 'podium-row ' + PODIUM_CLASSES[i];
+      row.innerHTML =
+        '<span class="mark">' + PODIUM_MARKS[i] + '</span>' +
+        '<span class="place">' + PODIUM_PLACES[i] + '</span>' +
+        '<span class="who">' + joinNames(place.names.map(escapeHtml), '&') + '</span>' +
+        (i === 0 ? '<span class="podium-crown">' + (tied ? 'JOINT WINNERS' : 'WINNER') + '</span>' : '') +
+        '<span class="pts">' + place.score + '</span>';
+      rows.appendChild(row);
+    });
+    var champs = places.length ? places[0].names : [];
+    el('podiumNote').textContent = !champs.length
+      ? 'Nobody played this one.'
+      : (champs.length > 1
+          ? ('It\'s a dead heat \u2014 ' + joinNames(champs, 'and') + ' share it.')
+          : (champs[0] + ' wins. Sweet dreams, everyone.'));
+  }
+
+  function showPodium(){
+    if (!players.length) return;
+    renderPodium();
+    // The fact has had its beat; leaving it up behind the scrim only crowds
+    // the scores.
+    clearTimeout(factTimer);
+    el('factBox').classList.remove('show');
+    el('podium').classList.add('show');
+  }
+
+  function hidePodium(){
+    clearTimeout(podiumTimer);
+    el('podium').classList.remove('show');
+  }
+
   function clearPortalLayer(){
     var top = el('roomBgTop');
     top.style.transition = 'none';
@@ -924,6 +1054,12 @@
   // empty, and then he turns up somewhere he has already been.
   function playFinale(elapsed){
     var roomBg = el('roomBg'), top = el('roomBgTop');
+    // Scheduled off `revealAt` on its own timer rather than chained to the
+    // reveal, so a browser that joins late still lands on the right beat.
+    clearTimeout(podiumTimer);
+    var untilPodium = (FINALE_TOTAL_MS + FINALE_PODIUM_MS) - elapsed;
+    if (untilPodium <= 0) showPodium();
+    else podiumTimer = setTimeout(showPodium, untilPodium);
     var T1 = FINALE_WALK_MS;
     var T2 = T1 + FINALE_PORTAL_MS;
     var T3 = T2 + FINALE_FADE_MS;
@@ -1066,6 +1202,7 @@
   }
 
   function renderPlayersBox(){
+    if (el('podium').classList.contains('show')) renderPodium();
     var box = el('playersBox');
     box.innerHTML = '';
     if (!players.length){
