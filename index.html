@@ -342,13 +342,13 @@
             ordinary round with the wardrobe on the board — the walk in and the vanish are the surprise. Once he's
             gone you open the second vote, and they bet 5 points on where he comes back out.</p>
           <p class="muted" id="hostPhaseNote"></p>
-          <h2 style="margin-top:10px;">This round's 3 options <span class="muted" style="text-transform:none;">(the team sees these)</span></h2>
+          <h2 style="margin-top:10px;"><span id="choiceHeading">This round's 3 options</span> <span class="muted" style="text-transform:none;">(the team sees these)</span></h2>
           <div class="target-grid" id="choiceGrid"></div>
           <p class="muted" id="choiceNote"></p>
           <div class="row" style="margin-top:8px;">
-            <button id="btnRandomChoices" class="btn">Pick 3 For Me</button>
+            <button id="btnRandomChoices" class="btn">Pick 3 For Me</button><!-- label set per round -->
           </div>
-          <h2 style="margin-top:10px;">Pick tonight's target <span class="muted" style="text-transform:none;">(hidden from team)</span></h2>
+          <h2 style="margin-top:10px;"><span id="targetHeading">Pick tonight's target</span> <span class="muted" style="text-transform:none;">(hidden from team)</span></h2>
           <div class="target-grid" id="targetGrid"></div>
           <p class="muted" id="usedNote"></p>
           <div class="row" style="margin-top:14px;">
@@ -1388,8 +1388,23 @@
     });
     var poolLeft = pool.length;
     el('btnRandomChoices').disabled = !picking || poolLeft < need;
+    el('btnRandomChoices').textContent = 'Pick ' + need + ' For Me';
+    el('choiceHeading').textContent = need === 1
+      ? 'This round\'s option'
+      : ('This round\'s ' + need + ' options');
+    el('targetHeading').textContent = stage === FINALE_STAGE_RETURN
+      ? 'Pick where he comes out'
+      : 'Pick tonight\'s target';
+
+    // Between the two halves of the finale the grids still hold part one's
+    // choice, so say what is actually next rather than "start a round".
+    var idleNote = 'Start a round to put ' + CHOICE_COUNT + ' locations up for a vote.';
+    if (stage === FINALE_STAGE_VANISH) idleNote = finaleLanded
+      ? 'Part one done \u2014 he\'s through. Open Second Vote to choose where he comes back out.'
+      : 'Part one is playing out\u2026';
+    else if (stage === FINALE_STAGE_RETURN) idleNote = 'Part two done. That\'s the game \u2014 Reset Game starts a fresh one.';
     el('choiceNote').textContent = !picking
-      ? 'Start a round to put ' + CHOICE_COUNT + ' locations up for a vote.'
+      ? idleNote
       : (poolLeft < need
           ? (stage === FINALE_STAGE_RETURN
               ? 'Only ' + poolLeft + ' used locations to come back out at — this needs ' + need + '.'
