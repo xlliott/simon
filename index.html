@@ -412,6 +412,10 @@
   var WARDROBE_INDEX = 6;
   var ROUND_POINTS = 1;
   var FINALE_POINTS = 5;
+  // Part one of the finale is a formality — the wardrobe is the only thing on
+  // the board and everyone will pick it — so it pays nothing. All the last
+  // night's points ride on where he comes back out.
+  var FINALE_VANISH_POINTS = 0;
   var PORTAL_IMG = "assets/sleepwalking-simon-portal.webp";
   var VANISHED_IMG = "assets/sleepwalking-simon-vanished.webp";
   // The finale runs in two stages inside one night, with two separate votes.
@@ -848,10 +852,11 @@
       if (session.targetIndex === null) return;
       if (session.choices.indexOf(session.targetIndex) === -1) return;
       var correctIdx = session.targetIndex;
-      // Only the bet on where he comes out is worth the big score; stage 1 is
-      // an ordinary round and pays like one.
-      var award = finaleStage() === FINALE_STAGE_RETURN ? FINALE_POINTS : ROUND_POINTS;
-      var updates = players
+      var award = ROUND_POINTS;
+      if (finaleStage() === FINALE_STAGE_VANISH) award = FINALE_VANISH_POINTS;
+      else if (finaleStage() === FINALE_STAGE_RETURN) award = FINALE_POINTS;
+      // A zero award writes nothing rather than writing the same score back.
+      var updates = award === 0 ? [] : players
         .filter(function(p){ return p.roundId === session.roundId && p.vote === correctIdx; })
         .map(function(p){
           return db.doc('players/' + slugify(p.name)).update({ score: (p.score||0) + award });

@@ -50,7 +50,8 @@ doesn't pick a target here; the team just has to click the one location left.
 Revealing walks him over, and he steps through the portal behind it and
 vanishes. That is the surprise, and nothing on screen gives it away beforehand:
 the status line reads only *"There he goes…"* until he is actually gone. It pays
-the ordinary 1 point, which everyone gets, so it doesn't move the standings.
+nothing — there is no guess in it — so all of the last night's points ride on
+part two.
 
 **Part two is the bet.** With him inside and the room left empty, the host
 clicks **Open Second Vote** — a fresh round, so everyone's part-one vote is
